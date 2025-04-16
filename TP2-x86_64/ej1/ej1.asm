@@ -128,3 +128,5 @@ string_proc_list_concat_asm:
 .return_null_concat:
     xor rax, rax
     ret
+
+section .note.GNU-stack noalloc noexec nowrite progbits
