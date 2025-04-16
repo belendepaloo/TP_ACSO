@@ -157,3 +157,5 @@ string_proc_list_concat_asm:
     pop rbx
     leave
     ret
+
+section .note.GNU-stack noalloc noexec nowrite progbits
