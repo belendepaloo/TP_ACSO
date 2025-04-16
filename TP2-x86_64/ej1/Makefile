@@ -1,4 +1,4 @@
-CC=gcc
+CC=c99
 CFLAGS= -Wall -Wextra -pedantic -O0 -g -lm -Wno-unused-variable -Wno-unused-parameter -no-pie -z noexecstack
 NASM=nasm
 NASMFLAGS=-f elf64 -g -F DWARF
