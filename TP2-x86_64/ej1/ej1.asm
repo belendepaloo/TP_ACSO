@@ -104,129 +104,89 @@ string_proc_list_add_node_asm:
     ret
 
 
-
 string_proc_list_concat_asm:
     push rbp
     mov rbp, rsp
     push rbx
     push r12
-    push r13
-    push r14
-    push r15
+    push rcx
+    push r8
+    push r9
+    push r10
 
-    ; Guardar argumentos
-    mov r12, rdi            ; r12 = list
-    movzx r13, sil          ; r13 = type (uint8_t)
-    mov r14, rdx            ; r14 = hash (char*)
+    mov rbx, rdi         ; rbx = list
+    mov r12d, esi        ; r12d = type
+    mov rcx, rdx         ; rcx = prefix
 
-    ; strlen(hash)
-    mov rdi, r14
+    ; Verificar si la lista es NULL
+    cmp rbx, 0
+    je .ret_null
+
+    ; Obtener longitud de prefix
+    mov rdi, rcx
     call strlen
-    mov r8, rax             ; r8 = strlen(hash)
-    inc r8                  ; +1 para null terminator
+    mov r8, rax          ; r8 = len_prefix
 
-    ; malloc(strlen(hash) + 1)
-    mov rdi, r8
+    ; Reservar memoria para string inicial
+    lea rdi, [r8 + 1]
     call malloc
+    mov r9, rax          ; r9 = result
+    cmp r9, 0
+    je .ret_null
+
+    ; Copiar prefix a result
+    mov rdi, r9
+    mov rsi, rcx
+    call strcpy
+
+    ; Empezar recorrido de la lista
+    mov r10, [rbx]       ; r10 = current = list->first
+
+.loop_start:
+    cmp r10, 0
+    je .done
+
+    movzx eax, byte [r10 + 16]  ; type del nodo
+
+    ; Comparar con type buscado
+    xor edx, edx
+    test eax, eax
+    setz dl               ; dl = 1 si eax == 0
+    cmp eax, r12d
+    jne .skip_node        ; si no es del tipo deseado, saltar
+
+    ; Concatenar string
+    mov rdi, r9           ; rdi = destino
+    mov rsi, [r10 + 24]   ; rsi = nodo->hash
+    call str_concat
     test rax, rax
-    jz .error
-    mov r15, rax            ; r15 = concat
+    je .skip_node
 
-    ; strcpy(concat, hash)
-    mov rdi, r15
-    mov rsi, r14
-.copy_hash:
-    mov al, byte [rsi]
-    mov [rdi], al
-    inc rsi
-    inc rdi
-    test al, al
-    jnz .copy_hash
-
-    ; current_node = list->first
-    mov rbx, [r12]          ; rbx = current_node
-
-.loop:
-    test rbx, rbx
-    jz .done
-
-    ; if (current_node->type == type)
-    movzx eax, byte [rbx + 16]   ; offset 16 = type
-    cmp al, r13b
-    jne .next_node
-
-    ; strlen(concat)
-    mov rdi, r15
-    call strlen
-    mov r8, rax
-
-    ; strlen(current_node->hash)
-    mov rdi, [rbx + 24]
-    call strlen
+    ; Liberar viejo string
+    mov rdi, r9
     mov r9, rax
-
-    ; new_size = strlen(concat) + strlen(current_node->hash) + 1
-    add r8, r9
-    inc r8
-
-    ; malloc(new_size)
-    mov rdi, r8
-    call malloc
-    test rax, rax
-    jz .error_cleanup
-    mov rdx, rax            ; rdx = new_result
-
-    ; strcpy(new_result, concat)
-    mov rdi, rdx
-    mov rsi, r15
-.copy_concat:
-    mov al, byte [rsi]
-    mov [rdi], al
-    inc rsi
-    inc rdi
-    test al, al
-    jnz .copy_concat
-
-    ; strcat(new_result, current_node->hash)
-    dec rdi                 ; volver al null terminator
-    mov rsi, [rbx + 24]     ; current_node->hash
-.copy_hash_append:
-    mov al, byte [rsi]
-    mov [rdi], al
-    inc rsi
-    inc rdi
-    test al, al
-    jnz .copy_hash_append
-
-    ; free(concat) y actualizar concat
-    mov rdi, r15
     call free
-    mov r15, rdx
 
-.next_node:
-    mov rbx, [rbx]          ; current_node = current_node->next
-    jmp .loop
+.skip_node:
+    mov r10, [r10]        ; avanzar a siguiente nodo
+    jmp .loop_start
 
 .done:
-    mov rax, r15            ; return concat
+    mov rax, r9
     jmp .end
 
-.error:
-    xor rax, rax
-    jmp .end
-
-.error_cleanup:
-    mov rdi, r15
-    call free
-    xor rax, rax
+.ret_null:
+    xor eax, eax
 
 .end:
-    pop r15
-    pop r14
-    pop r13
+    pop r10
+    pop r9
+    pop r8
+    pop rcx
     pop r12
     pop rbx
-    pop rbp
+    leave
     ret
+
 
 section .note.GNU-stack noalloc noexec nowrite progbits
