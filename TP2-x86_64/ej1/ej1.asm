@@ -19,19 +19,16 @@ extern str_concat
 extern strcpy
 extern strlen
 
-
 string_proc_list_create_asm:
-    push rdi
     mov rdi, 16
     call malloc
     test rax, rax
-    jz .done
-    
-    mov qword [rax], 0      
-    mov qword [rax + 8], 0  
-    
-.done:
-    pop rdi
+    je .return_null
+    mov qword [rax], 0
+    mov qword [rax+8], 0
+
+.return_null:
+    xor rax, rax          ; deja rax = 0
     ret
 
 string_proc_node_create_asm:
