@@ -65,45 +65,37 @@ string_proc_node_create_asm:
     jmp .return
 
 
-global string_proc_list_add_node_asm
-extern string_proc_node_create_asm
-
-section .text
-
 string_proc_list_add_node_asm:
-    ; ==== Prologue ====
+    ; ===== Prologue =====
     push rbx
     push r12
     push r13
 
-    ; ==== Guardar argumentos ====
+    ; ===== Guardar argumentos =====
     mov rbx, rdi         ; rbx ← list
-    movzx r12, sil       ; r12 ← type extendido (guardado)
+    mov r12b, sil        ; r12b ← type
     mov r13, rdx         ; r13 ← hash
 
-    ; ==== Llamar a string_proc_node_create_asm(type, hash) ====
-    ; Cargar argumentos como espera string_proc_node_create_asm:
-    ; - dil ← type (uint8_t)
-    ; - rsi ← hash
-    mov dil, r12b
-    mov rsi, r13
+    ; ===== Preparar y llamar a string_proc_node_create_asm(type, hash) =====
+    mov dil, r12b        ; type → dil (como espera la ABI)
+    mov rsi, r13         ; hash → rsi
     call string_proc_node_create_asm
     test rax, rax
-    jz .end              ; si node == NULL → return
-
+    jz .end              ; si malloc falló, salir
     test rbx, rbx
-    jz .end              ; si list == NULL → return
+    jz .end              ; si list es NULL, salir
 
     ; ==== rax contiene el nuevo nodo ====
+
     ; node->next = NULL
     xor r13, r13
-    mov [rax], r13       ; node->next = NULL
+    mov [rax], r13
 
     ; node->previous = list->last
     mov r13, [rbx + 8]
     mov [rax + 8], r13
 
-    ; if (list->last) list->last->next = node
+    ; if (list->last)
     test r13, r13
     jz .no_last
 
@@ -119,8 +111,7 @@ string_proc_list_add_node_asm:
 .end:
     pop r13
     pop r12
-    pop rbx
-    ret
+    pop
 
 
 string_proc_list_concat_asm:
