@@ -102,14 +102,6 @@ string_proc_list_add_node_asm:
     leave
     ret
 
-; string_proc_list_concat(list, type, hash)
-; rdi = list
-; sil = type (uint8_t)
-; rdx = hash
-
-section .text
-    global string_proc_list_concat_asm
-    extern strdup, strlen, realloc, strcat, fprintf, free, stderr
 
 string_proc_list_concat_asm:
     push rbp
@@ -203,8 +195,6 @@ string_proc_list_concat_asm:
     pop rbx
     pop rbp
     ret
-
-
 
 
 
