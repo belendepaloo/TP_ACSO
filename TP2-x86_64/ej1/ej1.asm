@@ -37,28 +37,30 @@ string_proc_list_create_asm:
     ret
 
 string_proc_node_create_asm:
-    push rdi
-    push rsi
+    push rdi         ; guarda type
+    push rsi         ; guarda hash
 
     mov rdi, 32
     call malloc
     test rax, rax
-    je .error_malloc
+    je .return_null
 
-    mov qword [rax], 0
-    mov qword [rax + 8], 0
-    mov byte [rax + 16], dil
+    ; Restaurar argumentos
+    pop rsi          ; rsi ← hash
+    pop rdi          ; rdi ← tipo (dil sigue conteniendo el valor)
 
-    mov [rax + 24], rsi
-    pop rsi
-    pop rdi
+    mov qword [rax], 0            ; next
+    mov qword [rax + 8], 0        ; previous
+    mov byte [rax + 16], dil      ; type
+    mov [rax + 24], rsi           ; hash
     ret
 
-.error_malloc:
+.return_null:
     xor rax, rax
     pop rsi
     pop rdi
     ret
+
 
 string_proc_list_add_node_asm:
     push rbp
