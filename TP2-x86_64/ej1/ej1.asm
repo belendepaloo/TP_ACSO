@@ -20,15 +20,20 @@ extern strdup
 
 
 string_proc_list_create_asm:
-    mov rdi, 16              ; sizeof(string_proc_list)
-    call malloc              ; rax = malloc(16)
+    ; rdi = tamaño (16 bytes)
+    mov rdi, 16
+    call malloc              ; devuelve puntero en rax
+
     test rax, rax
-    jz .return_null_list
-    mov qword [rax], 0       ; list->first = NULL
-    mov qword [rax+8], 0     ; list->last = NULL
+    je .return_null
+
+    ; inicializar estructura (dos punteros a NULL)
+    mov qword [rax], 0       ; first
+    mov qword [rax+8], 0     ; last
+
     ret
 
-.return_null_list:
+.return_null:
     xor rax, rax
     ret
 
