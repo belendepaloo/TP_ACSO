@@ -41,7 +41,13 @@ void string_proc_list_add_node(string_proc_list* list, uint8_t type, char* hash)
 }
 
 char* string_proc_list_concat(string_proc_list* list, uint8_t type , char* hash){
-    char* concat = strdup(hash);
+    char* concat = malloc(strlen(hash) + 1);
+    if (!concat) {
+        fprintf(stderr, "Error allocating memory for the result\n");
+        return NULL;
+    }
+    strcpy(concat, hash);
+
     if (!concat) {
         fprintf(stderr, "Error allocating memory for the result\n");
         return NULL;
