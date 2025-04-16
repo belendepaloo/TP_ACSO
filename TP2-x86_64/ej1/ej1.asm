@@ -64,57 +64,51 @@ string_proc_node_create_asm:
     xor rax, rax
     jmp .return
 
+global string_proc_list_add_node_asm
+extern string_proc_node_create_asm
+
+section .text
 
 string_proc_list_add_node_asm:
+    ; Prologue con stack frame (estilo distinto)
     push rbp
     mov rbp, rsp
-    push r8
-    push r9
-    push r10
-    push r11
+    push rbx
+    push r14
+    push r15
 
-    ; Guardar argumentos: list = rdi, type = sil, hash = rdx
-    mov r8, rdi        ; r8 ← list
-    movzx r9, sil      ; r9 ← type como entero (uint64)
-    mov r10, rdx       ; r10 ← hash
+    ; Guardar argumentos
+    mov rbx, rdi        ; rbx ← list
+    mov r14b, sil       ; r14b ← type
+    mov r15, rdx        ; r15 ← hash
 
-    ; Llamar a string_proc_node_create_asm
-    mov dil, r9b       ; type → dil
-    mov rsi, r10       ; hash → rsi
+    ; Preparar llamada a string_proc_node_create_asm(type, hash)
+    movzx rsi, r14b     ; rsi ← type (uint8_t)
+    mov rdx, r15        ; rdx ← hash
     call string_proc_node_create_asm
-
-    ; Si malloc falló → retornar
     test rax, rax
-    jz .done
+    jz .done            ; si node == NULL, salir
 
-    ; rax ← nodo nuevo
-    ; r8 ← list
+    ; si list->first == NULL (lista vacía)
+    cmp qword [rbx], 0
+    je .init_list
 
-    ; Verificar si lista vacía con TEST
-    test qword [r8], [r8]
-    setz r11b                ; r11b ← 1 si list->first == NULL, 0 si no
-
-    ; Condicional: si lista vacía → first = node
-    test r11b, r11b
-    jz .not_empty
-
-    ; lista vacía
-    mov [r8], rax        ; list->first = node
-    mov [r8 + 8], rax    ; list->last = node
+    ; lista no vacía → enlazar al final
+    mov rcx, [rbx + 8]      ; rcx ← list->last
+    mov [rcx], rax          ; rcx->next = node
+    mov [rax + 8], rcx      ; node->previous = rcx
+    mov [rbx + 8], rax      ; list->last = node
     jmp .done
 
-.not_empty:
-    ; lista no vacía
-    mov r10, [r8 + 8]     ; r10 ← list->last
-    mov [r10], rax        ; list->last->next = node
-    mov [rax + 8], r10    ; node->previous = list->last
-    mov [r8 + 8], rax     ; list->last = node
+.init_list:
+    ; lista vacía → first y last apuntan al nuevo nodo
+    mov [rbx], rax          ; list->first = node
+    mov [rbx + 8], rax      ; list->last = node
 
 .done:
-    pop r11
-    pop r10
-    pop r9
-    pop r8
+    pop r15
+    pop r14
+    pop rbx
     leave
     ret
 
