@@ -57,7 +57,7 @@ string_proc_list_add_node_asm:
     push rsi
     push rdx
 
-    mov rdi, sil             ; type (como uint8_t)
+    movzx rdi, sil             ; type (como uint8_t)
     mov rsi, rdx             ; hash
     call string_proc_node_create_asm
 
