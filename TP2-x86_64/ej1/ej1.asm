@@ -113,23 +113,17 @@ string_proc_list_concat_asm:
     push r14
     push r15
 
-    ; rdi = list
-    ; esi = type
-    ; rdx = prefix
+    mov rbx, rdi
+    mov r12d, esi
+    mov r13, rdx
 
-    mov rbx, rdi         ; list
-    mov r12d, esi        ; type
-    mov r13, rdx         ; prefix string
-
-    ; verificar si la lista es nula o vacía
     cmp rbx, 0
     je .return_null
 
-    mov r14, [rbx]       ; current = list->first
+    mov r14, [rbx]
     cmp r14, 0
     je .return_null
 
-    ; reservar espacio con el prefix
     mov rdi, r13
     call strlen
     lea rdi, [rax + 1]
@@ -137,44 +131,41 @@ string_proc_list_concat_asm:
     test rax, rax
     jz .return_null
 
-    mov r15, rax         ; resultado actual
+    mov r15, rax
     mov rdi, r15
     mov rsi, r13
     call strcpy
 
-.next_node:
+.next:
     cmp r14, 0
-    je .done
+    je .ending
 
-    ; cargar el type del nodo actual
     movzx eax, byte [r14 + 16]
     cmp eax, r12d
     jne .skip_append
 
-    ; concatenar si el tipo coincide
     mov rdi, r15
-    mov rsi, [r14 + 24]  ; nodo->hash
+    mov rsi, [r14 + 24]
     call str_concat
     test rax, rax
     jz .skip_append
 
-    ; liberar string anterior
     mov rdi, r15
     mov r15, rax
     call free
 
 .skip_append:
-    mov r14, [r14]       ; avanzar al siguiente nodo
-    jmp .next_node
+    mov r14, [r14]
+    jmp .next
 
-.done:
+.ending:
     mov rax, r15
-    jmp .cleanup
+    jmp .return
 
-.return_null:
+.error:
     xor eax, eax
 
-.cleanup:
+.return:
     pop r15
     pop r14
     pop r13
@@ -182,8 +173,5 @@ string_proc_list_concat_asm:
     pop rbx
     leave
     ret
-
-
-
 
 section .note.GNU-stack noalloc noexec nowrite progbits
