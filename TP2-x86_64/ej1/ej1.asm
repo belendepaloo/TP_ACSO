@@ -65,43 +65,63 @@ string_proc_node_create_asm:
     jmp .return
 
 
+global string_proc_list_add_node_asm
+extern string_proc_node_create_asm
+
+section .text
 
 string_proc_list_add_node_asm:
-    push rbp
-    mov rbp, rsp
+    ; ==== Prologue ====
     push rbx
     push r12
     push r13
-    
-    mov rbx, rdi            
-    mov r12b, sil           
-    mov r13, rdx            
-    
-    movzx rsi, r12b         
-    mov rdx, r13           
+
+    ; ==== Guardar argumentos ====
+    mov rbx, rdi         ; rbx ← list
+    movzx r12, sil       ; r12 ← type extendido (guardado)
+    mov r13, rdx         ; r13 ← hash
+
+    ; ==== Llamar a string_proc_node_create_asm(type, hash) ====
+    ; Cargar argumentos como espera string_proc_node_create_asm:
+    ; - dil ← type (uint8_t)
+    ; - rsi ← hash
+    mov dil, r12b
+    mov rsi, r13
     call string_proc_node_create_asm
     test rax, rax
-    jz .done
-    
-    cmp qword [rbx], 0
-    jne .append
-    
-    mov [rbx], rax         
-    mov [rbx + 8], rax   
-    jmp .done
-    
-.append:
-    mov rcx, [rbx + 8]     
-    mov [rcx], rax          
-    mov [rax + 8], rcx     
-    mov [rbx + 8], rax     
-    
-.done:
+    jz .end              ; si node == NULL → return
+
+    test rbx, rbx
+    jz .end              ; si list == NULL → return
+
+    ; ==== rax contiene el nuevo nodo ====
+    ; node->next = NULL
+    xor r13, r13
+    mov [rax], r13       ; node->next = NULL
+
+    ; node->previous = list->last
+    mov r13, [rbx + 8]
+    mov [rax + 8], r13
+
+    ; if (list->last) list->last->next = node
+    test r13, r13
+    jz .no_last
+
+    mov [r13], rax       ; list->last->next = node
+    jmp .set_last
+
+.no_last:
+    mov [rbx], rax       ; list->first = node
+
+.set_last:
+    mov [rbx + 8], rax   ; list->last = node
+
+.end:
     pop r13
     pop r12
     pop rbx
-    leave
     ret
+
 
 string_proc_list_concat_asm:
     push rbp
