@@ -66,53 +66,41 @@ string_proc_node_create_asm:
 
 
 string_proc_list_add_node_asm:
-    ; ===== Prologue =====
+    push rbp
+    mov rbp, rsp
     push rbx
     push r12
     push r13
-
-    ; ===== Guardar argumentos =====
-    mov rbx, rdi         ; rbx ← list
-    mov r12b, sil        ; r12b ← type
-    mov r13, rdx         ; r13 ← hash
-
-    ; ===== Preparar y llamar a string_proc_node_create_asm(type, hash) =====
-    mov dil, r12b        ; type → dil (como espera la ABI)
-    mov rsi, r13         ; hash → rsi
+    
+    mov rbx, rdi            
+    mov r12b, sil           
+    mov r13, rdx            
+    
+    movzx rsi, r12b         
+    mov rdx, r13           
     call string_proc_node_create_asm
     test rax, rax
-    jz .end              ; si malloc falló, salir
-    test rbx, rbx
-    jz .end              ; si list es NULL, salir
-
-    ; ==== rax contiene el nuevo nodo ====
-
-    ; node->next = NULL
-    xor r13, r13
-    mov [rax], r13
-
-    ; node->previous = list->last
-    mov r13, [rbx + 8]
-    mov [rax + 8], r13
-
-    ; if (list->last)
-    test r13, r13
-    jz .no_last
-
-    mov [r13], rax       ; list->last->next = node
-    jmp .set_last
-
-.no_last:
-    mov [rbx], rax       ; list->first = node
-
-.set_last:
-    mov [rbx + 8], rax   ; list->last = node
-
-.end:
+    jz .done
+    
+    cmp qword [rbx], 0
+    jne .append
+    
+    mov [rbx], rax         
+    mov [rbx + 8], rax   
+    jmp .done
+    
+.append:
+    mov rcx, [rbx + 8]     
+    mov [rcx], rax          
+    mov [rax + 8], rcx     
+    mov [rbx + 8], rax     
+    
+.done:
     pop r13
     pop r12
-    pop
-
+    pop rbx
+    leave
+    ret
 
 string_proc_list_concat_asm:
     push rbp
