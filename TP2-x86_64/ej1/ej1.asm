@@ -70,42 +70,36 @@ extern string_proc_node_create_asm
 section .text
 
 string_proc_list_add_node_asm:
-    ; Prologue con stack frame (estilo distinto)
     push rbp
     mov rbp, rsp
     push rbx
     push r14
     push r15
 
-    ; Guardar argumentos
-    mov rbx, rdi        ; rbx ← list
-    mov r14b, sil       ; r14b ← type
-    mov r15, rdx        ; r15 ← hash
+    mov rbx, rdi
+    mov r14b, sil
+    mov r15, rdx
 
-    ; Preparar llamada a string_proc_node_create_asm(type, hash)
-    movzx rsi, r14b     ; rsi ← type (uint8_t)
-    mov rdx, r15        ; rdx ← hash
+    movzx rsi, r14b
+    mov rdx, r15
     call string_proc_node_create_asm
     test rax, rax
-    jz .done            ; si node == NULL, salir
+    jz .return
 
-    ; si list->first == NULL (lista vacía)
     cmp qword [rbx], 0
     je .init_list
 
-    ; lista no vacía → enlazar al final
-    mov rcx, [rbx + 8]      ; rcx ← list->last
-    mov [rcx], rax          ; rcx->next = node
-    mov [rax + 8], rcx      ; node->previous = rcx
-    mov [rbx + 8], rax      ; list->last = node
-    jmp .done
+    mov rcx, [rbx + 8]
+    mov [rcx], rax
+    mov [rax + 8], rcx
+    mov [rbx + 8], rax
+    jmp .return
 
 .init_list:
-    ; lista vacía → first y last apuntan al nuevo nodo
-    mov [rbx], rax          ; list->first = node
-    mov [rbx + 8], rax      ; list->last = node
+    mov [rbx], rax
+    mov [rbx + 8], rax
 
-.done:
+.return:
     pop r15
     pop r14
     pop rbx
