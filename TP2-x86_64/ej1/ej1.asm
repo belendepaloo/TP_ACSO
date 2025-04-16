@@ -55,17 +55,14 @@ string_proc_node_create_asm:
     mov byte [rax + 16], r12b
     mov [rax + 24], rbx
 
-.ret_restore:
+.return:
     pop r12
     pop rbx
     ret
 
 .error_malloc:
     xor rax, rax
-    jmp .ret_restore
-
-
-
+    jmp .return
 
 
 
