@@ -68,39 +68,56 @@ string_proc_node_create_asm:
 string_proc_list_add_node_asm:
     push rbp
     mov rbp, rsp
-    push rbx
-    push r12
-    push r13
-    
-    mov rbx, rdi            
-    mov r12b, sil           
-    mov r13, rdx            
-    
-    movzx rsi, r12b         
-    mov rdx, r13           
+    push r8
+    push r9
+    push r10
+    push r11
+
+    ; Guardar argumentos: list = rdi, type = sil, hash = rdx
+    mov r8, rdi        ; r8 ← list
+    movzx r9, sil      ; r9 ← type como entero (uint64)
+    mov r10, rdx       ; r10 ← hash
+
+    ; Llamar a string_proc_node_create_asm
+    mov dil, r9b       ; type → dil
+    mov rsi, r10       ; hash → rsi
     call string_proc_node_create_asm
+
+    ; Si malloc falló → retornar
     test rax, rax
     jz .done
-    
-    cmp qword [rbx], 0
-    jne .append
-    
-    mov [rbx], rax         
-    mov [rbx + 8], rax   
+
+    ; rax ← nodo nuevo
+    ; r8 ← list
+
+    ; Verificar si lista vacía con TEST
+    test qword [r8], [r8]
+    setz r11b                ; r11b ← 1 si list->first == NULL, 0 si no
+
+    ; Condicional: si lista vacía → first = node
+    test r11b, r11b
+    jz .not_empty
+
+    ; lista vacía
+    mov [r8], rax        ; list->first = node
+    mov [r8 + 8], rax    ; list->last = node
     jmp .done
-    
-.append:
-    mov rcx, [rbx + 8]     
-    mov [rcx], rax          
-    mov [rax + 8], rcx     
-    mov [rbx + 8], rax     
-    
+
+.not_empty:
+    ; lista no vacía
+    mov r10, [r8 + 8]     ; r10 ← list->last
+    mov [r10], rax        ; list->last->next = node
+    mov [rax + 8], r10    ; node->previous = list->last
+    mov [r8 + 8], rax     ; list->last = node
+
 .done:
-    pop r13
-    pop r12
-    pop rbx
+    pop r11
+    pop r10
+    pop r9
+    pop r8
     leave
     ret
+
 
 string_proc_list_concat_asm:
     push rbp
