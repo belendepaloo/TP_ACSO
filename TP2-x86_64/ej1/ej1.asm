@@ -18,6 +18,7 @@ extern free
 extern str_concat
 extern strcpy
 extern strlen
+extern strdup
 
 string_proc_list_create_asm:
     push rdi
@@ -113,79 +114,69 @@ string_proc_list_concat_asm:
     push r15
 
     ; strdup(hash)
-    mov rdi, rdx        ; strdup(hash)
+    mov rdi, rdx            ; rdx = hash
     call strdup
     test rax, rax
-    jz .error_strdup
+    jz .error
 
-    mov r12, rdi        ; r12 = list
-    movzx r13, sil      ; r13 = type
-    mov r14, rdx        ; r14 = original hash
-    mov r15, rax        ; r15 = concat (current string)
+    mov r12, rdi            ; r12 = list
+    movzx r13, sil          ; r13 = type
+    mov r14, rdx            ; r14 = hash (original)
+    mov r15, rax            ; r15 = concat (resultado acumulado)
 
-    ; current_node = list->first
-    mov rbx, [r12]      ; rbx = current_node
+    ; rbx = list->first
+    mov rbx, [r12]          
 
 .loop:
     test rbx, rbx
     jz .done
 
     ; if (current_node->type == type)
-    movzx eax, byte [rbx]       ; current_node->type
+    movzx eax, byte [rbx + 16]   ; offset 16 = type
     cmp al, r13b
     jne .next_node
 
     ; strlen(concat)
     mov rdi, r15
     call strlen
-    mov r8, rax                ; strlen(concat)
+    mov r8, rax
 
     ; strlen(current_node->hash)
-    mov rdi, [rbx + 8]
+    mov rdi, [rbx + 24]
     call strlen
     add rax, r8
-    inc rax                   ; +1 for '\0'
+    inc rax                      ; +1 para null terminator
 
-    ; realloc(concat, new_len)
-    mov rdi, r15              ; old ptr
-    mov rsi, rax              ; new size
+    ; realloc(concat, total_len)
+    mov rdi, r15
+    mov rsi, rax
     call realloc
     test rax, rax
-    jz .error_realloc
+    jz .error_cleanup
 
-    mov r15, rax              ; concat = new_result
+    mov r15, rax                 ; concat = realloc result
 
     ; strcat(concat, current_node->hash)
-    mov rdi, r15              ; dest
-    mov rsi, [rbx + 8]        ; src = current_node->hash
+    mov rdi, r15
+    mov rsi, [rbx + 24]
     call strcat
 
 .next_node:
-    ; current_node = current_node->next
-    mov rbx, [rbx + 16]
+    mov rbx, [rbx]               ; avanzar al siguiente nodo
     jmp .loop
 
 .done:
-    mov rax, r15              ; return concat
+    mov rax, r15                 ; return concat
     jmp .end
 
-.error_strdup:
-    ; fprintf(stderr, ...)
-    mov rdi, [rel stderr]
-    mov rsi, err_strdup_msg
-    call fprintf
-    xor rax, rax
+.error:
+    xor rax, rax                 ; return NULL
     jmp .end
 
-.error_realloc:
-    mov rdi, [rel stderr]
-    mov rsi, err_realloc_msg
-    call fprintf
-
+.error_cleanup:
     mov rdi, r15
     call free
-
-    xor rax, rax
+    xor rax, rax                 ; return NULL
 
 .end:
     pop r15
@@ -195,7 +186,6 @@ string_proc_list_concat_asm:
     pop rbx
     pop rbp
     ret
-
 
 
 section .note.GNU-stack noalloc noexec nowrite progbits
