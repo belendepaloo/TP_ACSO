@@ -20,43 +20,45 @@ extern strcpy
 extern strlen
 
 string_proc_list_create_asm:
+    push rdi
     mov rdi, 16
     call malloc
     test rax, rax
-    je .return_null
+    je .error_malloc
     mov qword [rax], 0
     mov qword [rax+8], 0
+
+    pop rdi
     ret
 
-.return_null:
-    xor rax, rax          ; deja rax = 0
+.error_malloc:
+    xor rax, rax
+    pop rdi
     ret
 
 string_proc_node_create_asm:
-    push rbp
-    mov rbp, rsp
-    push rbx
-    push r12
-    
-    mov bl, sil             
-    mov r12, rdx           
-    
-    mov rdi, 32          
+    push rdi
+    push rsi
+
+    mov rdi, 32
     call malloc
     test rax, rax
-    jz .done
-    
-    mov qword [rax], 0     
-    mov qword [rax + 8], 0  
-    mov byte [rax + 16], bl 
-    mov [rax + 24], r12  
-    
-.done:
-    pop r12
-    pop rbx
-    leave
+    je .malloc_error
+
+    mov qword [rax], 0
+    mov qword [rax + 8], 0
+    mov byte [rax + 16], dil
+
+    mov [rax + 24], rsi
+    pop rsi
+    pop rdi
     ret
 
+.error_malloc:
+    xor rax, rax
+    pop rsi
+    pop rdi
+    ret
 
 string_proc_list_add_node_asm:
     push rbp
