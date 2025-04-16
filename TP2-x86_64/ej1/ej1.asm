@@ -50,9 +50,6 @@ string_proc_node_create_asm:
     ret
 
 
-
-
-
 global string_proc_list_add_node_asm
 string_proc_list_add_node_asm:
     ; rdi = list
@@ -100,34 +97,36 @@ string_proc_list_concat_asm:
     ; rsi = type
     ; rdx = hash
 
-    ; Copiamos el hash inicial
-    mov rdi, rdx
-    call strdup            ; strdup(hash)
+    ; Copiar hash inicial con strdup
+    push rdi                 ; guardar list (rdi)
+    mov rdi, rdx             ; pasar hash a strdup
+    call strdup              ; rax ← strdup(hash)
     test rax, rax
     jz .return_null_concat
-    mov r8, rax            ; r8 = result
+    mov r8, rax              ; r8 ← result
+    pop rdi                  ; restaurar list (rdi)
 
-    mov rcx, [rdi]         ; rcx = list->first
+    mov rcx, [rdi]           ; rcx ← list->first
 
 .loop:
     test rcx, rcx
     jz .done
 
-    movzx r9, BYTE [rcx+16]    ; r9 = current->type
+    movzx r9, byte [rcx+16]  ; r9 ← current->type
     cmp r9b, sil
     jne .next
 
     ; str_concat(result, current->hash)
     mov rdi, r8
-    mov rsi, [rcx+17]          ; current->hash
+    mov rsi, [rcx+24]        ; current->hash
     call str_concat
     test rax, rax
     jz .fail_concat
 
-    mov r8, rax                ; actualizar resultado
+    mov r8, rax              ; actualizar resultado
 
 .next:
-    mov rcx, [rcx]             ; current = current->next
+    mov rcx, [rcx]           ; rcx ← current->next
     jmp .loop
 
 .done:
@@ -137,9 +136,11 @@ string_proc_list_concat_asm:
 .fail_concat:
     mov rdi, r8
     call free
+
 .return_null_concat:
     xor rax, rax
     ret
+
 
 
 
