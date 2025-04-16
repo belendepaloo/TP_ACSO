@@ -43,7 +43,7 @@ string_proc_node_create_asm:
     mov rdi, 32
     call malloc
     test rax, rax
-    je .malloc_error
+    je .error_malloc
 
     mov qword [rax], 0
     mov qword [rax + 8], 0
