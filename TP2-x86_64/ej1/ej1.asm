@@ -38,32 +38,28 @@ string_proc_list_create_asm:
 
 
 string_proc_node_create_asm:
-    ; Guardar registros de entrada
-    push rdi          ; contiene 'type' (en dil)
-    push rsi          ; contiene 'hash'
-    
-    mov rdx, rsi      ; backup de 'hash'
-    mov rdi, 32       ; malloc(32)
+    ; Guardar argumentos en registros seguros
+    movzx rdx, dil         ; guardar type como entero (8 bits → 64 bits)
+    mov rcx, rsi           ; guardar hash
+
+    ; Reservar memoria
+    mov rdi, 32            ; tamaño del nodo
     call malloc
     test rax, rax
     je .return_null
 
-    ; Recuperar argumentos
-    pop rsi           ; restaurar 'hash' por formalidad (aunque usamos rdx)
-    pop rdi           ; restaurar 'type' (dil sigue válido si no fue tocado)
+    ; rax = puntero al nuevo nodo
 
     ; Inicializar campos
     mov qword [rax], 0         ; next
     mov qword [rax + 8], 0     ; previous
-    mov byte [rax + 16], dil   ; type (1 byte)
-    mov [rax + 24], rdx        ; hash (puntero)
+    mov byte [rax + 16], dl    ; type ← guardado en dl (baja de rdx)
+    mov [rax + 24], rcx        ; hash ← puntero
 
     ret
 
 .return_null:
     xor rax, rax
-    pop rsi
-    pop rdi
     ret
 
 
