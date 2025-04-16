@@ -37,22 +37,24 @@ string_proc_list_create_asm:
     ret
 
 string_proc_node_create_asm:
-    push rdi         ; guarda type
-    push rsi         ; guarda hash
+    push rdi
+    push rsi
+
+    mov rdx, rsi         ; guardar copia de hash en un registro seguro
 
     mov rdi, 32
     call malloc
     test rax, rax
     je .return_null
 
-    ; Restaurar argumentos
-    pop rsi          ; rsi ← hash
-    pop rdi          ; rdi ← tipo (dil sigue conteniendo el valor)
+    pop rsi
+    pop rdi
 
     mov qword [rax], 0            ; next
     mov qword [rax + 8], 0        ; previous
     mov byte [rax + 16], dil      ; type
-    mov [rax + 24], rsi           ; hash
+    mov [rax + 24], rdx           ; hash = valor original de rsi
+
     ret
 
 .return_null:
@@ -60,6 +62,7 @@ string_proc_node_create_asm:
     pop rsi
     pop rdi
     ret
+
 
 
 string_proc_list_add_node_asm:
