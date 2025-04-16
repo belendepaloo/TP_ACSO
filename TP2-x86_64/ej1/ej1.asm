@@ -102,53 +102,58 @@ string_proc_list_add_node_asm:
     leave
     ret
 
-
 string_proc_list_concat_asm:
     push rbp
     mov rbp, rsp
     push rbx
     push r12
     push r13
+    push r14          ; nuevo registro: dst->last
+    push r15          ; nuevo registro: src->first
 
-    mov rbx, rdi         ; rbx = dst
-    mov r12, rsi         ; r12 = src
+    ; Guardar parámetros
+    mov rbx, rdi       ; dst
+    mov r12, rsi       ; src
 
-    ; src == NULL or src->first == NULL => return
-    mov r13, [r12]       ; r13 = src->first
-    test r13, r13
+    ; Si src o src->first es NULL, salir
+    mov r15, [r12]     ; r15 = src->first
+    test r15, r15
     jz .fin
 
-    ; dst->first == NULL ? -> copy src directly
-    mov rax, [rbx]       ; rax = dst->first
-    test rax, rax
-    jnz .append
+    ; Si dst->first es NULL, simplemente copiar los punteros de src
+    mov r14, [rbx]     ; r14 = dst->first
+    test r14, r14
+    jnz .concatenar
 
-    ; dst is empty: copy src pointers
+    ; dst está vacía, se copia src entera
     mov rax, [r12]       ; src->first
-    mov [rbx], rax       ; dst->first
+    mov [rbx], rax       ; dst->first = src->first
     mov rax, [r12 + 8]   ; src->last
-    mov [rbx + 8], rax   ; dst->last
-    jmp .null_src
+    mov [rbx + 8], rax   ; dst->last = src->last
+    jmp .limpiar_src
 
-.append:
-    ; dst->last = [rbx + 8], src->first = [r12]
-    mov rdx, [rbx + 8]
-    mov [r13 + 8], rdx       ; src->first->prev = dst->last
-    mov [rdx], r13           ; dst->last->next = src->first
-    mov rax, [r12 + 8]
-    mov [rbx + 8], rax       ; dst->last = src->last
+.concatenar:
+    ; dst->last = [rbx + 8], src->first = r15
+    mov r14, [rbx + 8]    ; r14 = dst->last
+    mov [r14], r15        ; dst->last->next = src->first
+    mov [r15 + 8], r14    ; src->first->prev = dst->last
 
-.null_src:
-    ; clear src->first y src->last
-    mov qword [r12], 0
-    mov qword [r12 + 8], 0
+    mov rax, [r12 + 8]    ; rax = src->last
+    mov [rbx + 8], rax    ; dst->last = src->last
+
+.limpiar_src:
+    mov qword [r12], 0      ; src->first = NULL
+    mov qword [r12 + 8], 0  ; src->last = NULL
 
 .fin:
+    pop r15
+    pop r14
     pop r13
     pop r12
     pop rbx
     leave
     ret
+
 
 
 
