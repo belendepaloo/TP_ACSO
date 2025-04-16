@@ -113,67 +113,68 @@ string_proc_list_concat_asm:
     push r14
     push r15
 
-    mov rbx, rdi        ; list
-    mov r12d, esi       ; type
-    mov r13, rdx        ; prefix
+    ; rdi = list
+    ; esi = type
+    ; rdx = prefix
 
-    ; Check list != NULL
-    test rbx, rbx
-    jz .return_null
+    mov rbx, rdi         ; list
+    mov r12d, esi        ; type
+    mov r13, rdx         ; prefix string
 
-    ; strlen(prefix)
+    ; verificar si la lista es nula o vacía
+    cmp rbx, 0
+    je .return_null
+
+    mov r14, [rbx]       ; current = list->first
+    cmp r14, 0
+    je .return_null
+
+    ; reservar espacio con el prefix
     mov rdi, r13
     call strlen
-    mov r14, rax
-
-    ; malloc(len + 1)
-    lea rdi, [r14 + 1]
+    lea rdi, [rax + 1]
     call malloc
-    mov r15, rax
-    test r15, r15
+    test rax, rax
     jz .return_null
 
-    ; strcpy(result, prefix)
+    mov r15, rax         ; resultado actual
     mov rdi, r15
     mov rsi, r13
     call strcpy
 
-    ; current = list->first
-    mov r13, [rbx]
-
-.loop:
-    cmp r13, 0
+.next_node:
+    cmp r14, 0
     je .done
 
-    ; if (node->type == type)
-    movzx eax, byte [r13 + 16]
+    ; cargar el type del nodo actual
+    movzx eax, byte [r14 + 16]
     cmp eax, r12d
-    jne .next
+    jne .skip_append
 
-    ; str_concat(result, node->hash)
+    ; concatenar si el tipo coincide
     mov rdi, r15
-    mov rsi, [r13 + 24]
+    mov rsi, [r14 + 24]  ; nodo->hash
     call str_concat
     test rax, rax
-    jz .next
+    jz .skip_append
 
-    ; free(old), result = new
+    ; liberar string anterior
     mov rdi, r15
     mov r15, rax
     call free
 
-.next:
-    mov r13, [r13]   ; node = node->next
-    jmp .loop
+.skip_append:
+    mov r14, [r14]       ; avanzar al siguiente nodo
+    jmp .next_node
 
 .done:
     mov rax, r15
-    jmp .return
+    jmp .cleanup
 
 .return_null:
     xor eax, eax
 
-.return:
+.cleanup:
     pop r15
     pop r14
     pop r13
@@ -181,6 +182,7 @@ string_proc_list_concat_asm:
     pop rbx
     leave
     ret
+
 
 
 
