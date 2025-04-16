@@ -1,0 +1,43 @@
+Maria Belen Depalo mdepalo@udesa.edu.ar
+
+Phase 1
+En la phase_1 se compara el input con una cadena almacena en la dirección de memoria 0x4c9a58. La idea es que las cadenas son iguales, 
+entonces se activa el Zero Flag y lugoe en la sigueinte intrucción, cuando se hace el jne este no se activa, por ende no se salta a la 
+dirección donde se encuntra el explode_bomb. En la dirección 0x4c9a58 se encotraba "Por la libertad, asi como por la honra, se puede y 
+se debe aventurar la vida"
+
+Phase 2
+Se empieza guardando algunos registros, luego se mueve el argumento rdi que contiene el input a rbx. Se llama a la función 4011c0. 
+Esta fucnción debe devolver un puntero distinto de NULL porque sino en la intruccion  401e43:	74 59                	je     401e9e <phase_2+0x7c> 
+se activa el jump y se salta a la bomba. Entonce spara que esto no ovurra, el input debe tener un espacio separando dos numeros.
+Un par de intrucciones despues, en imul   eax,ebp , se multiplican los dos valores y luego en test   eax,eax se testea a ver si el resultado es cero. 
+Si es asi en la siguiente intruccion se realiza un jump a una bomba, por ende, ninguno de los dos valores de eax y ebp puede ser cero.
+Despúes, se suman en add    ebx,ebp y se la compara con 0xacfb que representa el número 44283 en decimal. Si la suma no es igual, se activa el jump 
+de la sigueinte instrucción y se salta a la bomba. Entonces, la segunda condición que deben cumplir los numeros del input es que su suma debe dar 44283
+Finalmente, se sigue hasta la función misterio, donde se realiza un XOR de esi y edi. Donde estan los dos valores ingresados, y se guarda el resultado en esi
+Se revisa si el resultado es negativo, si es negativo, js 401e21 se activa y se hace el ret de misterio volviendo al flujo de la phase_2. Esta es la tercer condicion, 
+el XOR entre los numeros debe dar negativo. Por ultimo, se libera el lugar de la pila con los pop y se hace el ret de phase_2. Los valores que elegí que cumplian las
+condiciones fueron "50000 -5717"
+
+Phase 3
+Se comenzó observando la instrucción 40205e: 83 f8 02              cmp    eax, 0x2. Esta comparación se realiza 
+luego de un call a __isoc99_sscanf, lo que indica que el programa espera exactamente dos inputs. Si no se ingresan dos argumentos, se llama a un explode_bomb.
+Luego, se llama a la función "cuenta", que implementa una búsqueda binaria recursiva. Esta función acumula en cada llamada el mid recorrido, y retorna la suma de todos 
+los mid visitados durante el recorrido. Para encontrar un input válido, se colocó un breakpoint justo antes del retorno de la función "cuenta", en la instrucción 0x401fe3 (mov eax, ebx), 
+que copia el valor acumulado en eax para retornarlo. Imprimí strings que estaban en la lsita de palabras y encontré uno sufiecientemente grande para 
+luego cumplir con la condición de que su suma de mid devueltos fuera mayor a 9999, en la isntrucción 402089:	3d 0f 27 00 00       	cmp    eax,0x270f. 
+Finalmente, se encontró que para la palabra "enviejar", la función "cuenta" devolvía el valor 78715, 
+lo cual cumple ambas condiciones: está presente en la lista y su resultado supera el umbral de 9999. Mi input entonces fue "enviejar 78715"
+
+Phase 4
+Primero entendí que la función me pedía un string de seis caracteres porque al hacer la instruccion 402109:	83 f8 06             	cmp    eax,0x6,
+se compara con el valor seis por ende en el llamado previo a esta instrucción, a la función string_length necesito un input de ese tamaño porque sino se llama
+a explode_bomb. Luego se entra en un bucle que itera sobre los seis caracteres del string el bucle comienza en 0x402121 y termina en 402131 cuando no se ejecuta 
+el jump en 0x402131 porque ya se iteró sobre todo el string. En cada iteración, toma el valor ASCII del carácter (movzx edx, BYTE PTR [rax]), lo enmascara con 
+0x0f (and edx, 0xf), quedándose con los últimos 4 bits (o sea, valores entre 0 y 15), y usa ese número como índice para acceder a un arreglo de 
+enteros llamado array.0 , cuya dirección base es cargada en rsi. Luego, el valor que encuentra en el arreglo se suma a un acumulador ecx. Esto se repite para los 6 caracteres.
+Al final del bucle, se compara si el valor de ecx es exactamente igual a 0x34 (52 decimal). Si no lo es, se llama a explode_bomb. 
+Entonces para resolver esta fase se encontré una cadena de exactamente 6 caracteres cuyos bits bajos correspondan a índices del arreglo array.0 
+tales que los 6 valores sumen exactamente 52. Para resolverla, observé el contenido del arreglo array.0 con y luego oncontré una 
+combinación de índices entre 0 y 15 cuya suma dé 52. Finalmente, esos índices deben mapearse a caracteres ASCII con esos bits bajos deseados
+El input que elegí es 555566.
