@@ -112,59 +112,67 @@ string_proc_list_concat_asm:
     push r13
     push r14
     push r15
-    
-    mov rbx, rdi           
-    mov r12d, esi           
-    mov r13, rdx           
-    
 
+    mov rbx, rdi        ; list
+    mov r12d, esi       ; type
+    mov r13, rdx        ; prefix
+
+    ; Check list != NULL
     test rbx, rbx
     jz .return_null
-    
+
+    ; strlen(prefix)
     mov rdi, r13
     call strlen
-    mov r14, rax           
-    
+    mov r14, rax
+
+    ; malloc(len + 1)
     lea rdi, [r14 + 1]
     call malloc
-    mov r15, rax           
+    mov r15, rax
     test r15, r15
     jz .return_null
-    
+
+    ; strcpy(result, prefix)
     mov rdi, r15
     mov rsi, r13
     call strcpy
-    
-    mov r14, [rbx]          
+
+    ; current = list->first
+    mov r13, [rbx]
+
 .loop:
-    test r14, r14
-    jz .done
-    
-    movzx eax, byte [r14 + 16]
+    cmp r13, 0
+    je .done
+
+    ; if (node->type == type)
+    movzx eax, byte [r13 + 16]
     cmp eax, r12d
-    jne .next_node
-    
+    jne .next
+
+    ; str_concat(result, node->hash)
     mov rdi, r15
-    mov rsi, [r14 + 24]     
+    mov rsi, [r13 + 24]
     call str_concat
     test rax, rax
-    jz .next_node
-    
+    jz .next
+
+    ; free(old), result = new
     mov rdi, r15
     mov r15, rax
     call free
-    
-.next_node:
-    mov r14, [r14]         
+
+.next:
+    mov r13, [r13]   ; node = node->next
     jmp .loop
-    
+
 .done:
-    mov rax, r15         
+    mov rax, r15
     jmp .return
-    
+
 .return_null:
     xor eax, eax
-    
+
 .return:
     pop r15
     pop r14
@@ -173,6 +181,7 @@ string_proc_list_concat_asm:
     pop rbx
     leave
     ret
+
 
 
 section .note.GNU-stack noalloc noexec nowrite progbits
