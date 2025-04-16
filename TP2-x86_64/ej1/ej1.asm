@@ -118,18 +118,18 @@ string_proc_list_concat_asm:
     mov r13, rdx
 
     cmp rbx, 0
-    je .return_null
+    je .error
 
     mov r14, [rbx]
     cmp r14, 0
-    je .return_null
+    je .error
 
     mov rdi, r13
     call strlen
     lea rdi, [rax + 1]
     call malloc
     test rax, rax
-    jz .return_null
+    jz .error
 
     mov r15, rax
     mov rdi, r15
