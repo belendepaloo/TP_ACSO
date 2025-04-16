@@ -64,10 +64,6 @@ string_proc_node_create_asm:
     xor rax, rax
     jmp .return
 
-global string_proc_list_add_node_asm
-extern string_proc_node_create_asm
-
-section .text
 
 string_proc_list_add_node_asm:
     push rbp
@@ -106,70 +102,54 @@ string_proc_list_add_node_asm:
     leave
     ret
 
+
 string_proc_list_concat_asm:
     push rbp
     mov rbp, rsp
     push rbx
     push r12
     push r13
-    push r14
 
-    ; Argumentos:
-    ; rdi = dst
-    ; rsi = src
+    mov rbx, rdi         ; rbx = dst
+    mov r12, rsi         ; r12 = src
 
-    ; Guardamos argumentos en registros callee-saved
-    mov rbx, rdi        ; dst
-    mov r12, rsi        ; src
-
-    ; Chequear si dst o src son NULL
-    test rbx, rbx
-    jz .fin
-    test r12, r12
-    jz .fin
-
-    ; src->first == NULL → no hay nada que concatenar
-    mov r13, [r12]      ; r13 = src->first
+    ; src == NULL or src->first == NULL => return
+    mov r13, [r12]       ; r13 = src->first
     test r13, r13
     jz .fin
 
-    ; dst->first == NULL → dst está vacío → copiar src directo
-    mov r14, [rbx]      ; r14 = dst->first
-    test r14, r14
+    ; dst->first == NULL ? -> copy src directly
+    mov rax, [rbx]       ; rax = dst->first
+    test rax, rax
     jnz .append
 
-    ; dst vacío → hacer dst->first = src->first; dst->last = src->last
-    mov [rbx], r13          ; dst->first = src->first
-    mov r14, [r12 + 8]      ; src->last
-    mov [rbx + 8], r14      ; dst->last = src->last
-    jmp .clear_src
+    ; dst is empty: copy src pointers
+    mov rax, [r12]       ; src->first
+    mov [rbx], rax       ; dst->first
+    mov rax, [r12 + 8]   ; src->last
+    mov [rbx + 8], rax   ; dst->last
+    jmp .null_src
 
 .append:
-    ; conectar las listas:
-    ; dst->last->next = src->first
-    ; src->first->previous = dst->last
+    ; dst->last = [rbx + 8], src->first = [r12]
+    mov rdx, [rbx + 8]
+    mov [r13 + 8], rdx       ; src->first->prev = dst->last
+    mov [rdx], r13           ; dst->last->next = src->first
+    mov rax, [r12 + 8]
+    mov [rbx + 8], rax       ; dst->last = src->last
 
-    mov r14, [rbx + 8]      ; r14 = dst->last
-    mov [r14], r13          ; dst->last->next = src->first
-    mov [r13 + 8], r14      ; src->first->previous = dst->last
-
-    ; dst->last = src->last
-    mov r14, [r12 + 8]      ; r14 = src->last
-    mov [rbx + 8], r14      ; dst->last = src->last
-
-.clear_src:
-    ; src->first = NULL; src->last = NULL
-    xor r14, r14
-    mov [r12], r14
-    mov [r12 + 8], r14
+.null_src:
+    ; clear src->first y src->last
+    mov qword [r12], 0
+    mov qword [r12 + 8], 0
 
 .fin:
-    pop r14
     pop r13
     pop r12
     pop rbx
     leave
     ret
+
 
 
 section .note.GNU-stack noalloc noexec nowrite progbits
