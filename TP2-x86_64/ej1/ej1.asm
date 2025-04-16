@@ -26,6 +26,7 @@ string_proc_list_create_asm:
     je .return_null
     mov qword [rax], 0
     mov qword [rax+8], 0
+    ret
 
 .return_null:
     xor rax, rax          ; deja rax = 0
