@@ -102,57 +102,108 @@ string_proc_list_add_node_asm:
     leave
     ret
 
+; string_proc_list_concat(list, type, hash)
+; rdi = list
+; sil = type (uint8_t)
+; rdx = hash
+
+section .text
+    global string_proc_list_concat_asm
+    extern strdup, strlen, realloc, strcat, fprintf, free, stderr
+
 string_proc_list_concat_asm:
     push rbp
     mov rbp, rsp
     push rbx
     push r12
     push r13
-    push r14          ; nuevo registro: dst->last
-    push r15          ; nuevo registro: src->first
+    push r14
+    push r15
 
-    ; Guardar parámetros
-    mov rbx, rdi       ; dst
-    mov r12, rsi       ; src
+    ; strdup(hash)
+    mov rdi, rdx        ; strdup(hash)
+    call strdup
+    test rax, rax
+    jz .error_strdup
 
-    ; Si src o src->first es NULL, salir
-    mov r15, [r12]     ; r15 = src->first
-    test r15, r15
-    jz .fin
+    mov r12, rdi        ; r12 = list
+    movzx r13, sil      ; r13 = type
+    mov r14, rdx        ; r14 = original hash
+    mov r15, rax        ; r15 = concat (current string)
 
-    ; Si dst->first es NULL, simplemente copiar los punteros de src
-    mov r14, [rbx]     ; r14 = dst->first
-    test r14, r14
-    jnz .concatenar
+    ; current_node = list->first
+    mov rbx, [r12]      ; rbx = current_node
 
-    ; dst está vacía, se copia src entera
-    mov rax, [r12]       ; src->first
-    mov [rbx], rax       ; dst->first = src->first
-    mov rax, [r12 + 8]   ; src->last
-    mov [rbx + 8], rax   ; dst->last = src->last
-    jmp .limpiar_src
+.loop:
+    test rbx, rbx
+    jz .done
 
-.concatenar:
-    ; dst->last = [rbx + 8], src->first = r15
-    mov r14, [rbx + 8]    ; r14 = dst->last
-    mov [r14], r15        ; dst->last->next = src->first
-    mov [r15 + 8], r14    ; src->first->prev = dst->last
+    ; if (current_node->type == type)
+    movzx eax, byte [rbx]       ; current_node->type
+    cmp al, r13b
+    jne .next_node
 
-    mov rax, [r12 + 8]    ; rax = src->last
-    mov [rbx + 8], rax    ; dst->last = src->last
+    ; strlen(concat)
+    mov rdi, r15
+    call strlen
+    mov r8, rax                ; strlen(concat)
 
-.limpiar_src:
-    mov qword [r12], 0      ; src->first = NULL
-    mov qword [r12 + 8], 0  ; src->last = NULL
+    ; strlen(current_node->hash)
+    mov rdi, [rbx + 8]
+    call strlen
+    add rax, r8
+    inc rax                   ; +1 for '\0'
 
-.fin:
+    ; realloc(concat, new_len)
+    mov rdi, r15              ; old ptr
+    mov rsi, rax              ; new size
+    call realloc
+    test rax, rax
+    jz .error_realloc
+
+    mov r15, rax              ; concat = new_result
+
+    ; strcat(concat, current_node->hash)
+    mov rdi, r15              ; dest
+    mov rsi, [rbx + 8]        ; src = current_node->hash
+    call strcat
+
+.next_node:
+    ; current_node = current_node->next
+    mov rbx, [rbx + 16]
+    jmp .loop
+
+.done:
+    mov rax, r15              ; return concat
+    jmp .end
+
+.error_strdup:
+    ; fprintf(stderr, ...)
+    mov rdi, [rel stderr]
+    mov rsi, err_strdup_msg
+    call fprintf
+    xor rax, rax
+    jmp .end
+
+.error_realloc:
+    mov rdi, [rel stderr]
+    mov rsi, err_realloc_msg
+    call fprintf
+
+    mov rdi, r15
+    call free
+
+    xor rax, rax
+
+.end:
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
-    leave
+    pop rbp
     ret
+
 
 
 
