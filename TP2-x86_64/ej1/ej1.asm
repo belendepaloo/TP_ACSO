@@ -37,6 +37,39 @@ string_proc_list_create_asm:
     ret
 
 
+string_proc_node_create_asm:
+    ; ======== Prologue ========
+    push rbx               ; preservamos callee-saved que vamos a usar
+    push r12               ; lo mismo
+
+    ; ======== Guardamos argumentos ========
+    mov rbx, rdx           ; rbx ← hash (char*)
+    movzx r12, sil         ; r12 ← type (uint8_t extendido)
+
+    ; ======== Reservamos memoria ========
+    mov rdi, 32
+    call malloc
+    test rax, rax
+    je .ret_null
+
+    ; ======== Inicializamos nodo ========
+    xor rcx, rcx
+    mov [rax], rcx         ; next = NULL
+    mov [rax + 8], rcx     ; previous = NULL
+    mov byte [rax + 16], r12b ; type = r12 (baja)
+    mov [rax + 24], rbx    ; hash = rbx
+
+.ret_restore:
+    pop r12
+    pop rbx
+    ret
+
+.ret_null:
+    xor rax, rax
+    jmp .ret_restore
+
+
+
 
 string_proc_node_create_asm:
     push rbp
