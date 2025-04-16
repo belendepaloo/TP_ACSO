@@ -109,80 +109,66 @@ string_proc_list_concat_asm:
     mov rbp, rsp
     push rbx
     push r12
-    push rcx
-    push r8
-    push r9
-    push r10
+    push r13
+    push r14
+    push r15
+    
+    mov rbx, rdi           
+    mov r12d, esi           
+    mov r13, rdx           
+    
 
-    mov rbx, rdi         ; rbx = list
-    mov r12d, esi        ; r12d = type
-    mov rcx, rdx         ; rcx = prefix
-
-    ; Verificar si la lista es NULL
-    cmp rbx, 0
-    je .ret_null
-
-    ; Obtener longitud de prefix
-    mov rdi, rcx
+    test rbx, rbx
+    jz .return_null
+    
+    mov rdi, r13
     call strlen
-    mov r8, rax          ; r8 = len_prefix
-
-    ; Reservar memoria para string inicial
-    lea rdi, [r8 + 1]
+    mov r14, rax           
+    
+    lea rdi, [r14 + 1]
     call malloc
-    mov r9, rax          ; r9 = result
-    cmp r9, 0
-    je .ret_null
-
-    ; Copiar prefix a result
-    mov rdi, r9
-    mov rsi, rcx
+    mov r15, rax           
+    test r15, r15
+    jz .return_null
+    
+    mov rdi, r15
+    mov rsi, r13
     call strcpy
-
-    ; Empezar recorrido de la lista
-    mov r10, [rbx]       ; r10 = current = list->first
-
-.loop_start:
-    cmp r10, 0
-    je .done
-
-    movzx eax, byte [r10 + 16]  ; type del nodo
-
-    ; Comparar con type buscado
-    xor edx, edx
-    test eax, eax
-    setz dl               ; dl = 1 si eax == 0
+    
+    mov r14, [rbx]          
+.loop:
+    test r14, r14
+    jz .done
+    
+    movzx eax, byte [r14 + 16]
     cmp eax, r12d
-    jne .skip_node        ; si no es del tipo deseado, saltar
-
-    ; Concatenar string
-    mov rdi, r9           ; rdi = destino
-    mov rsi, [r10 + 24]   ; rsi = nodo->hash
+    jne .next_node
+    
+    mov rdi, r15
+    mov rsi, [r14 + 24]     
     call str_concat
     test rax, rax
-    je .skip_node
-
-    ; Liberar viejo string
-    mov rdi, r9
-    mov r9, rax
+    jz .next_node
+    
+    mov rdi, r15
+    mov r15, rax
     call free
-
-.skip_node:
-    mov r10, [r10]        ; avanzar a siguiente nodo
-    jmp .loop_start
-
+    
+.next_node:
+    mov r14, [r14]         
+    jmp .loop
+    
 .done:
-    mov rax, r9
-    jmp .end
-
-.ret_null:
+    mov rax, r15         
+    jmp .return
+    
+.return_null:
     xor eax, eax
-
-.end:
-    pop r10
-    pop r9
-    pop r8
-    pop rcx
+    
+.return:
+    pop r15
+    pop r14
+    pop r13
     pop r12
     pop rbx
     leave
