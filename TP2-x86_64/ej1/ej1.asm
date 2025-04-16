@@ -19,6 +19,8 @@ extern str_concat
 extern strcpy
 extern strlen
 extern strdup
+extern strcat
+extern realloc
 
 string_proc_list_create_asm:
     push rdi
