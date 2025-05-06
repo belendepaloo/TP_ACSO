@@ -15,7 +15,12 @@ int pathname_lookup(struct unixfilesystem *fs, const char *pathname) {
         return -1; // Ruta inválida
     }
 
-    int inumber = 1; // Comenzar desde el inodo raíz
+    // Caso especial: raíz
+    if (strcmp(pathname, "/") == 0) {
+        return 1;
+    }
+
+    int inumber = 1; // Inodo raíz
 
     // Crear una copia mutable del path
     char path_copy[strlen(pathname) + 1];
@@ -34,4 +39,5 @@ int pathname_lookup(struct unixfilesystem *fs, const char *pathname) {
 
     return inumber;
 }
+
 
