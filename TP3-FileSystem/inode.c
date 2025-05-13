@@ -5,6 +5,8 @@
 #include "diskimg.h"
 
 
+#define INODE_SIZE sizeof(struct inode)
+
 /**
  * TODO
  */
@@ -13,7 +15,7 @@ int inode_iget(struct unixfilesystem *fs, int inumber, struct inode *inp) {
         return -1;
     }
 
-    int inodes_per_sector = DISKIMG_SECTOR_SIZE / sizeof(struct inode);
+    int inodes_per_sector = DISKIMG_SECTOR_SIZE / INODE_SIZE;
     int sector = INODE_START_SECTOR + (inumber - 1) / inodes_per_sector;
     int offset = (inumber - 1) % inodes_per_sector;
 
