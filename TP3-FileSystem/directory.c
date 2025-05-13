@@ -6,18 +6,13 @@
 #include <string.h>
 #include <assert.h>
 
-/**
- * TODO
- */
-int directory_findname(struct unixfilesystem *fs, const char *name,
-                       int dirinumber, struct direntv6 *dirEnt) {
+int directory_findname(struct unixfilesystem *fs, const char *name, int dirinumber, struct direntv6 *dirEnt) {
     struct inode in;
     if (inode_iget(fs, dirinumber, &in) < 0) {
         return -1;
     }
 
     if (!(in.i_mode & IALLOC) || ((in.i_mode & IFMT) != IFDIR)) {
-        // No está asignado o no es un directorio
         return -1;
     }
 
@@ -40,6 +35,6 @@ int directory_findname(struct unixfilesystem *fs, const char *name,
         }
     }
 
-    return -1;  // No se encontró
+    return -1;
 }
 

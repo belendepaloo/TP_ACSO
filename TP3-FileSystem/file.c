@@ -5,9 +5,6 @@
 #include "inode.h"
 #include "diskimg.h"
 
-/**
- * TODO
- */
 int file_getblock(struct unixfilesystem *fs, int inumber, int blockNum, void *buf) {
     struct inode in;
     if (inode_iget(fs, inumber, &in) < 0) {
