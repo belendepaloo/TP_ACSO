@@ -81,7 +81,6 @@ int inode_indexlookup(struct unixfilesystem *fs, struct inode *inode_pointer, in
     }
 }
 
-
 int inode_getsize(struct inode *inode_pointer) {
   return ((inode_pointer->i_size0 << 16) | inode_pointer->i_size1); 
 }
