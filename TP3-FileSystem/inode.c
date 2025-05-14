@@ -7,24 +7,27 @@
 #define INODE_SIZE sizeof(struct inode)
 
 
-int inode_iget(struct unixfilesystem *fs, int inumber, struct inode *inode_pointer) {
+int inode_iget(struct unixfilesystem *file_system, int inumber, struct inode *inode_pointer) {
     if (inumber < 1) {
         return -1;
     }
 
-    int inodes_per_sector = DISKIMG_SECTOR_SIZE / INODE_SIZE;
-    int sector = INODE_START_SECTOR + (inumber - 1) / inodes_per_sector;
-    int offset = (inumber - 1) % inodes_per_sector;
+    int num_inodes_per_sector = DISKIMG_SECTOR_SIZE / sizeof(struct inode);
+    int zero_based_inumber = inumber - 1;
+    int inode_sector_number = INODE_START_SECTOR + (zero_based_inumber / num_inodes_per_sector);
+    int inode_offset_within_sector = zero_based_inumber % num_inodes_per_sector;
 
-    struct inode inodes[inodes_per_sector];
-    int error_caution = diskimg_readsector(fs->dfd, sector, &inodes);
-    if (error_caution == -1) {
+    struct inode inode_sector_buffer[num_inodes_per_sector];
+
+    int read_result = diskimg_readsector(file_system->dfd, inode_sector_number, &inode_sector_buffer);
+    if (read_result == -1) {
         return -1;
     }
 
-    *inode_pointer = inodes[offset];
+    *inode_pointer = inode_sector_buffer[inode_offset_within_sector];
     return 0;
 }
+
 
 int inode_indexlookup(struct unixfilesystem *fs, struct inode *inode_pointer, int fBlockNum) {
     if (!(inode_pointer->i_mode & IALLOC)) {
