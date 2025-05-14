@@ -6,12 +6,12 @@
 #include "diskimg.h"
 
 int file_getblock(struct unixfilesystem *fs, int inumber, int blockNum, void *buf) {
-    struct inode in;
-    if (inode_iget(fs, inumber, &in) < 0) {
+    struct inode inode_data;
+    if (inode_iget(fs, inumber, &inode_data) < 0) {
         return -1;
     }
 
-    int block = inode_indexlookup(fs, &in, blockNum);
+    int block = inode_indexlookup(fs, &inode_data, blockNum);
     if (block == -1) {
         return -1;
     }
@@ -21,7 +21,7 @@ int file_getblock(struct unixfilesystem *fs, int inumber, int blockNum, void *bu
         return -1;
     }
 
-    int filesize = inode_getsize(&in);
+    int filesize = inode_getsize(&inode_data);
     int max_bytes = filesize - (blockNum * DISKIMG_SECTOR_SIZE);
 
     if (max_bytes >= DISKIMG_SECTOR_SIZE) {
