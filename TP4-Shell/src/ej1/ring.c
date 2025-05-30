@@ -74,26 +74,32 @@ int main(int argc, char **argv)
 
 void child_process(int i, int n, int start, int pipes[][2], int parent_pipe[2]) {
     for (int j = 0; j < n; j++) {
-        if (j != (i - 1 + n) % n) close(pipes[j][0]); // Solo leo del anterior
-        if (j != i) close(pipes[j][1]);               // Solo escribo al siguiente
+        if (j != (i - 1 + n) % n && j != i) {
+            close(pipes[j][0]);
+            close(pipes[j][1]);
+        }
+        if (j != (i - 1 + n) % n && j == i) close(pipes[j][0]);
+        if (j != i && j == (i - 1 + n) % n) close(pipes[j][1]);
     }
 
     close(parent_pipe[0]); // No leo del padre
 
     int num;
 
-    // Leer desde el anterior
-    read(pipes[(i - 1 + n) % n][0], &num, sizeof(int));
+    if (i == start) {
+        read(pipes[i][0], &num, sizeof(int));  // leer directamente del padre
+    } else {
+        read(pipes[(i - 1 + n) % n][0], &num, sizeof(int));  // leer del anterior
+    }
 
-    // Incrementar
     num++;
 
-    // Escribir al siguiente o al padre
     if (i == start) {
         write(parent_pipe[1], &num, sizeof(int));
     } else {
         write(pipes[i][1], &num, sizeof(int));
     }
 
-    exit(0); // Terminar proceso hijo
+    exit(0);
 }
+
