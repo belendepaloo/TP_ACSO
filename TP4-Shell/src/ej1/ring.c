@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+void child_process(int i, int n, int start, int pipes[][2], int parent_pipe[2]);
 
 int main(int argc, char **argv)
 {	
@@ -36,7 +37,7 @@ int main(int argc, char **argv)
 	}
 
 	for (int i = 0; i < n; i++) {
-    	pid_t pid = fork();
+    	pid = fork();
     	if (pid < 0) {
     	    perror("fork");
     	    exit(1);
@@ -65,8 +66,10 @@ int main(int argc, char **argv)
 
 	// Esperar que terminen los hijos
 	for (int i = 0; i < n; i++) {
-	    wait(NULL);
+	    wait(&status); 
 	}
+
+	return 0;
 }
 
 void child_process(int i, int n, int start, int pipes[][2], int parent_pipe[2]) {
