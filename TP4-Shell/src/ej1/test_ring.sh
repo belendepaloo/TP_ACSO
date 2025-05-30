@@ -39,3 +39,6 @@ run_test 5 100 2 106
 run_test 6 5 3 12
 run_test 2 20 1 23  # mínimo 3 procesos en enunciado, este test sirve para verificar borde
 
+
+
+
