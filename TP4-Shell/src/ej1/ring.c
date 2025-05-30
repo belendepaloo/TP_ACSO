@@ -77,31 +77,32 @@ int main(int argc, char **argv)
 }
 
 void child_process(int i, int n, int start, int pipes[][2], int parent_pipe[2]) {
+    // Cerrar todos los pipes que no necesito
     for (int j = 0; j < n; j++) {
-        if (j != i) close(pipes[j][1]); // Solo escribo en pipes[i]
-        if (!(i == start && j == i) && j != (i - 1 + n) % n) {
-            close(pipes[j][0]); // Solo leo de (i-1) o del padre si soy el start
+        if (j != i) close(pipes[j][1]);  // solo escribo en pipes[i][1]
+        if (j != (i - 1 + n) % n && !(i == start && j == i)) {
+            close(pipes[j][0]);  // solo leo de mi predecesor o del padre si soy start
         }
     }
 
-    close(parent_pipe[0]); // No leo del padre
+    close(parent_pipe[0]); // nunca leo del pipe padre
 
     int num;
 
     if (i == start) {
-        // 1. Recibo del padre
+        // 1. Leo del padre
         read(pipes[i][0], &num, sizeof(int));
         printf("[Hijo %d] Recibí %d del padre\n", i, num);
 
-        // 2. Envío sin incrementar
+        // 2. Envío al siguiente sin incrementar
         write(pipes[i][1], &num, sizeof(int));
         printf("[Hijo %d] Envié %d al hijo %d\n", i, num, (i + 1) % n);
 
-        // 3. Recibo vuelta desde el anterior
+        // 3. Leo la vuelta desde el predecesor
         read(pipes[(i - 1 + n) % n][0], &num, sizeof(int));
         printf("[Hijo %d] Recibí %d del hijo %d (vuelta)\n", i, num, (i - 1 + n) % n);
 
-        // 4. Incremento final
+        // 4. Incremento final y envío al padre
         num++;
         printf("[Hijo %d] Incremento final a %d\n", i, num);
 
@@ -109,6 +110,7 @@ void child_process(int i, int n, int start, int pipes[][2], int parent_pipe[2]) 
         printf("[Hijo %d] Envié %d al padre\n", i, num);
 
     } else {
+        // Resto de procesos
         read(pipes[(i - 1 + n) % n][0], &num, sizeof(int));
         printf("[Hijo %d] Recibí %d del hijo %d\n", i, num, (i - 1 + n) % n);
 
