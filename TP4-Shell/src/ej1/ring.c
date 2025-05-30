@@ -18,6 +18,11 @@ int main(int argc, char **argv)
 	buffer[0] = atoi(argv[2]);
 	start = atoi(argv[3]);
 
+	if (n < 3) {
+    	fprintf(stderr, "Error: se requieren al menos 3 procesos para formar un anillo.\n");
+    	exit(1);
+	}
+
     printf("Se crearán %i procesos, se enviará el caracter %i desde proceso %i \n", n, buffer[0], start);
     
    	/* You should start programming from here... */
