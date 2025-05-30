@@ -48,15 +48,14 @@ int main(int argc, char **argv)
 	}
 	// Código del proceso padre
 
+	write(pipes[start][1], &buffer[0], sizeof(int));
+
 	// Cierro los extremos de pipes que no uso
 	for (int i = 0; i < n; i++) {
 	    close(pipes[i][0]);
 	    close(pipes[i][1]);
 	}
 	close(parent_pipe[1]); // Solo leo del hijo
-
-	// Enviar número inicial al proceso 'start'
-	write(pipes[start][1], &buffer[0], sizeof(int));
 
 	// Leer resultado final desde el pipe especial
 	int resultado_final;
