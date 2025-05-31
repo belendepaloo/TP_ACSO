@@ -70,29 +70,14 @@ int main() {
                 wordexp_t p;
                 if (wordexp(commands[i], &p, 0) != 0) {
                     perror("wordexp");
-                    wordfree(&p);
+                    wordfree(&p); 
                     exit(EXIT_FAILURE);
                 }
-
-                char **args = malloc((p.we_wordc + 1) * sizeof(char *));
-                if (!args) {
-                    perror("malloc");
-                    wordfree(&p);
-                    exit(EXIT_FAILURE);
-                }
-                for (size_t k = 0; k < p.we_wordc; ++k) {
-                    args[k] = p.we_wordv[k];
-                }
-                args[p.we_wordc] = NULL;
-
                 wordfree(&p);
-
-                execvp(args[0], args);
+                execvp(p.we_wordv[0], p.we_wordv);
                 perror("execvp");
-                free(args);
                 exit(EXIT_FAILURE);
-
-                            }
+            }
         }
 
         for (int i = 0; i < command_count - 1; i++) {
