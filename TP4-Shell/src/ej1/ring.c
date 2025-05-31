@@ -22,12 +22,14 @@ int main(int argc, char **argv)
     	fprintf(stderr, "Error: se requieren al menos 3 procesos para formar un anillo.\n");
     	exit(1);
 	}
-
+	if (start < 0 || start >= n) {
+    	fprintf(stderr, "Error: índice de inicio no válido\n");
+    	exit(1);
+	}
     printf("Se crearán %i procesos, se enviará el caracter %i desde proceso %i \n", n, buffer[0], start);
     
    	/* You should start programming from here... */
 	int pipes[n][2]; // pipes[i]: el proceso i escribe, y el proceso (i+1)%n lee
-
 	for (int i = 0; i < n; i++) {
 	    if (pipe(pipes[i]) == -1) {
 	        perror("pipe");
@@ -41,6 +43,7 @@ int main(int argc, char **argv)
 	    exit(1);
 	}
 
+
 	for (int i = 0; i < n; i++) {
     	pid = fork();
     	if (pid < 0) {
@@ -51,6 +54,8 @@ int main(int argc, char **argv)
     	    child_process(i, n, start, pipes, parent_pipe);
     	}
 	}
+
+
 	// Código del proceso padre
 
 	write(pipes[start][1], &buffer[0], sizeof(int));
