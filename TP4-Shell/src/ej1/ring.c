@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < n; i++)
         if (pipe(pipes[i]) == -1) error_exit("pipe");
 
-    if (pipe(parent_pipe) == -1) error_exit("pipe padre");
+    if (pipe(parent_pipe) == -1) error_exit("pipe parent");
 
     for (int i = 0; i < n; i++) {
         int pid = fork();
@@ -60,7 +60,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Proceso padre
     write(pipes[start][1], &val, sizeof(int));
 
     for (int i = 0; i < n; i++) {
