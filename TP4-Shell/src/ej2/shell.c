@@ -70,6 +70,7 @@ int main() {
                 wordexp_t p;
                 if (wordexp(commands[i], &p, 0) != 0) {
                     perror("wordexp");
+                    wordfree(&p); 
                     exit(EXIT_FAILURE);
                 }
                 execvp(p.we_wordv[0], p.we_wordv);
