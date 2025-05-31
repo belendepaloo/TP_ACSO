@@ -53,7 +53,7 @@ int main() {
                 exit(EXIT_FAILURE);
             }
 
-            if (pid) {
+            if (!pid) {
                 if (i > 0) {
                     dup2(pipes[i - 1][READ_END], STDIN_FILENO);
                 }
