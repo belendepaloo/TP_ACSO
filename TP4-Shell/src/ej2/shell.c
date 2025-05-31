@@ -19,28 +19,25 @@ int main() {
     while (1) 
     {
         printf("Shell> ");
-        fflush(stdout); // Asegura que se muestre el prompt
+        fflush(stdout);
 
-        // Leer línea de comando
-        if (fgets(command, sizeof(command), stdin) == NULL) {
-            break; // EOF (Ctrl+D)
-        }
-
-        // Eliminar el salto de línea al final
-        command[strcspn(command, "\n")] = '\0';
-        if (strcmp(command, "exit") == 0) {
+        if (!fgets(command, sizeof(command), stdin)) {
             break;
         }
 
-        // Tokenizar los comandos por "|"
+        command[strcspn(command, "\n")] = '\0';
         char *token = strtok(command, "|");
+
+        
+        if (!strcmp(command, "exit")) {
+            break;
+        }
         while (token != NULL) 
         {
             commands[command_count++] = token;
             token = strtok(NULL, "|");
         }
 
-        // Crear pipes
         int pipes[MAX_COMMANDS - 1][2];
         for (int i = 0; i < command_count - 1; i++) {
             if (pipe(pipes[i]) == -1) {
@@ -49,26 +46,22 @@ int main() {
             }
         }
 
-        // Crear procesos para cada comando
         for (int i = 0; i < command_count; i++) {
-            pid_t pid = fork();
+            int pid = fork();
             if (pid == -1) {
                 perror("fork");
                 exit(EXIT_FAILURE);
             }
 
-            if (pid == 0) {
-                // Redireccionar entrada si no es el primer comando
+            if (pid) {
                 if (i > 0) {
                     dup2(pipes[i - 1][READ_END], STDIN_FILENO);
                 }
 
-                // Redireccionar salida si no es el último comando
                 if (i < command_count - 1) {
                     dup2(pipes[i][WRITE_END], STDOUT_FILENO);
                 }
 
-                // Cerrar todos los extremos de pipes
                 for (int j = 0; j < command_count - 1; j++) {
                     close(pipes[j][READ_END]);
                     close(pipes[j][WRITE_END]);
@@ -80,26 +73,21 @@ int main() {
                     exit(EXIT_FAILURE);
                 }
                 execvp(p.we_wordv[0], p.we_wordv);
-                perror("execvp"); // Solo se ejecuta si execvp falla
+                perror("execvp");
                 wordfree(&p);
                 exit(EXIT_FAILURE);
             }
         }
 
-        // En el padre: cerrar todos los pipes
         for (int i = 0; i < command_count - 1; i++) {
             close(pipes[i][READ_END]);
             close(pipes[i][WRITE_END]);
         }
 
-        // Esperar a todos los hijos
         for (int i = 0; i < command_count; i++) {
             wait(NULL);
         }
-
-        // Resetear para la siguiente línea de comandos
         command_count = 0;
     }
-
     return 0;
 }
