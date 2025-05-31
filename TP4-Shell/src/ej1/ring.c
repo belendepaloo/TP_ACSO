@@ -37,10 +37,10 @@ int main(int argc, char **argv) {
     if (pipe(parent_pipe) == -1) error_exit("pipe padre");
 
     for (int i = 0; i < n; i++) {
-        pid_t pid = fork();
+        int pid = fork();
         if (pid == -1) error_exit("fork");
 
-        if (pid == 0) { // Proceso hijo
+        if (pid == 0) {
             for (int j = 0; j < n; j++) {
                 if (j != i) close(pipes[j][0]);
                 if (j != (i + 1) % n) close(pipes[j][1]);
