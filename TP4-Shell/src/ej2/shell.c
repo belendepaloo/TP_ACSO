@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <wordexp.h>
+
 
 #define MAX_COMMANDS 200
 #define READ_END 0
@@ -69,19 +71,14 @@ int main() {
                     close(pipes[j][WRITE_END]);
                 }
 
-                // Separar argumentos
-                char *args[64];
-                int arg_count = 0;
-                char *arg = strtok(commands[i], " ");
-                while (arg != NULL) {
-                    args[arg_count++] = arg;
-                    arg = strtok(NULL, " ");
+                wordexp_t p;
+                if (wordexp(commands[i], &p, 0) != 0) {
+                    perror("wordexp");
+                    exit(EXIT_FAILURE);
                 }
-                args[arg_count] = NULL;
-
-                // Ejecutar comando
-                execvp(args[0], args);
-                perror("execvp");
+                execvp(p.we_wordv[0], p.we_wordv);
+                perror("execvp"); // Solo se ejecuta si execvp falla
+                wordfree(&p);
                 exit(EXIT_FAILURE);
             }
         }
