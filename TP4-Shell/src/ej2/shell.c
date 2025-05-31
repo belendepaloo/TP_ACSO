@@ -73,9 +73,9 @@ int main() {
                     wordfree(&p); 
                     exit(EXIT_FAILURE);
                 }
-                wordfree(&p);
                 execvp(p.we_wordv[0], p.we_wordv);
                 perror("execvp");
+                wordfree(&p);
                 exit(EXIT_FAILURE);
             }
         }
