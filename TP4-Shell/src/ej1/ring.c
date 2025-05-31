@@ -43,14 +43,30 @@ int main(int argc, char **argv) {
     }
 
     for (int i = 0; i < n; i++) {
-        pid = fork();
-        if (pid == -1) {
-            perror("fork");
-            exit(1);
-        } else if (pid == 0) {
-            child_process(i, n, start, pipes, parent_pipe);
-        }
-    }
+		pid = fork();
+		if (pid == -1) {
+			perror("fork");
+			exit(1);
+		} else if (pid == 0) {
+			for (int j = 0; j < n; j++) {
+				if (j != i) close(pipes[j][0]); 
+				if (j != (i + 1) % n) close(pipes[j][1]); 
+			}
+			close(parent_pipe[0]); 
+			if (i != (start + n - 1) % n)
+				close(parent_pipe[1]); 
+
+			int val;
+			read(pipes[i][0], &val, sizeof(int));
+			val++;
+			if (i == (start + n - 1) % n) {
+				write(parent_pipe[1], &val, sizeof(int));
+			} else {
+				write(pipes[(i + 1) % n][1], &val, sizeof(int));
+			}
+			exit(0);
+		}
+	}
 
     // 🔧 FIX: el padre debe escribir el valor después de que todos los hijos se hayan creado
     write(pipes[start][1], &buffer[0], sizeof(int));
