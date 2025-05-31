@@ -49,25 +49,38 @@ int main(int argc, char **argv)
 			perror("fork");
 			exit(1);
 		} else if (pid == 0) {
+			// Cierro los pipes que no uso
 			for (int j = 0; j < n; j++) {
-				if (j != i) close(pipes[j][0]); 
-				if (j != (i + 1) % n) close(pipes[j][1]); 
+				if (j != (i - 1 + n) % n) close(pipes[j][0]); // solo leo del anterior
+				if (j != i) close(pipes[j][1]); // solo escribo al siguiente
 			}
-			close(parent_pipe[0]); 
-			if (i != (start + n - 1) % n)
-				close(parent_pipe[1]); 
-
+			if (i != start)
+				close(pipes[start][0]); // solo el start lee lo del padre
+			close(parent_pipe[0]); // no leo del padre en ningún hijo
+			if ((i + 1) % n != start)
+				close(parent_pipe[1]); // solo el último en la vuelta escribe al padre
+	
 			int val;
-			read(pipes[i][0], &val, sizeof(int));
+	
+			// Si soy el que inicia, leo del padre
+			if (i == start) {
+				read(pipes[i][0], &val, sizeof(int));
+			} else {
+				read(pipes[(i - 1 + n) % n][0], &val, sizeof(int));
+			}
+	
 			val++;
-			if (i == (start + n - 1) % n) {
+	
+			// Si soy el último antes de volver al start, escribo al padre
+			if ((i + 1) % n == start) {
 				write(parent_pipe[1], &val, sizeof(int));
 			} else {
-				write(pipes[(i + 1) % n][1], &val, sizeof(int));
+				write(pipes[i][1], &val, sizeof(int));
 			}
 			exit(0);
 		}
 	}
+
 
 	// Cierro los extremos de pipes que no uso
 	for (int i = 0; i < n; i++) {
