@@ -25,6 +25,9 @@ int main() {
         if (fgets(command, sizeof(command), stdin) == NULL) {
             break; // EOF (Ctrl+D)
         }
+        if (strcmp(command, "exit") == 0) {
+            break;
+        }
 
         // Eliminar el salto de línea al final
         command[strcspn(command, "\n")] = '\0';
