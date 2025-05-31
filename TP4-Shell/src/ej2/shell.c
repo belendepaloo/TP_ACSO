@@ -5,6 +5,8 @@
 #include <string.h>
 
 #define MAX_COMMANDS 200
+#define READ_END 0
+#define WRITE_END 1
 
 int main() {
 
@@ -15,21 +17,17 @@ int main() {
     while (1) 
     {
         printf("Shell> ");
-        
-        /*Reads a line of input from the user from the standard input (stdin) and stores it in the variable command */
-        fgets(command, sizeof(command), stdin);
-        
-        /* Removes the newline character (\n) from the end of the string stored in command, if present. 
-           This is done by replacing the newline character with the null character ('\0').
-           The strcspn() function returns the length of the initial segment of command that consists of 
-           characters not in the string specified in the second argument ("\n" in this case). */
+        fflush(stdout); // Asegura que se muestre el prompt
+
+        // Leer línea de comando
+        if (fgets(command, sizeof(command), stdin) == NULL) {
+            break; // EOF (Ctrl+D)
+        }
+
+        // Eliminar el salto de línea al final
         command[strcspn(command, "\n")] = '\0';
 
-        /* Tokenizes the command string using the pipe character (|) as a delimiter using the strtok() function. 
-           Each resulting token is stored in the commands[] array. 
-           The strtok() function breaks the command string into tokens (substrings) separated by the pipe character |. 
-           In each iteration of the while loop, strtok() returns the next token found in command. 
-           The tokens are stored in the commands[] array, and command_count is incremented to keep track of the number of tokens found. */
+        // Tokenizar los comandos por "|"
         char *token = strtok(command, "|");
         while (token != NULL) 
         {
@@ -37,11 +35,71 @@ int main() {
             token = strtok(NULL, "|");
         }
 
-        /* You should start programming from here... */
-        for (int i = 0; i < command_count; i++) 
-        {
-            printf("Command %d: %s\n", i, commands[i]);
-        }    
+        // Crear pipes
+        int pipes[MAX_COMMANDS - 1][2];
+        for (int i = 0; i < command_count - 1; i++) {
+            if (pipe(pipes[i]) == -1) {
+                perror("pipe");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        // Crear procesos para cada comando
+        for (int i = 0; i < command_count; i++) {
+            pid_t pid = fork();
+            if (pid == -1) {
+                perror("fork");
+                exit(EXIT_FAILURE);
+            }
+
+            if (pid == 0) {
+                // Redireccionar entrada si no es el primer comando
+                if (i > 0) {
+                    dup2(pipes[i - 1][READ_END], STDIN_FILENO);
+                }
+
+                // Redireccionar salida si no es el último comando
+                if (i < command_count - 1) {
+                    dup2(pipes[i][WRITE_END], STDOUT_FILENO);
+                }
+
+                // Cerrar todos los extremos de pipes
+                for (int j = 0; j < command_count - 1; j++) {
+                    close(pipes[j][READ_END]);
+                    close(pipes[j][WRITE_END]);
+                }
+
+                // Separar argumentos
+                char *args[64];
+                int arg_count = 0;
+                char *arg = strtok(commands[i], " ");
+                while (arg != NULL) {
+                    args[arg_count++] = arg;
+                    arg = strtok(NULL, " ");
+                }
+                args[arg_count] = NULL;
+
+                // Ejecutar comando
+                execvp(args[0], args);
+                perror("execvp");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        // En el padre: cerrar todos los pipes
+        for (int i = 0; i < command_count - 1; i++) {
+            close(pipes[i][READ_END]);
+            close(pipes[i][WRITE_END]);
+        }
+
+        // Esperar a todos los hijos
+        for (int i = 0; i < command_count; i++) {
+            wait(NULL);
+        }
+
+        // Resetear para la siguiente línea de comandos
+        command_count = 0;
     }
+
     return 0;
 }
