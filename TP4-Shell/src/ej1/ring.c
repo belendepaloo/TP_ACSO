@@ -43,22 +43,31 @@ int main(int argc, char **argv)
 	    exit(1);
 	}
 
-
 	for (int i = 0; i < n; i++) {
-    	pid = fork();
-    	if (pid < 0) {
-    	    perror("fork");
-    	    exit(1);
-    	}
-    	if (pid == 0) {
-    	    child_process(i, n, start, pipes, parent_pipe);
-    	}
+		pid = fork();
+		if (pid == -1) {
+			perror("fork");
+			exit(1);
+		} else if (pid == 0) {
+			for (int j = 0; j < n; j++) {
+				if (j != i) close(pipes[j][0]); 
+				if (j != (i + 1) % n) close(pipes[j][1]); 
+			}
+			close(parent_pipe[0]); 
+			if (i != (start + n - 1) % n)
+				close(parent_pipe[1]); 
+
+			int val;
+			read(pipes[i][0], &val, sizeof(int));
+			val++;
+			if (i == (start + n - 1) % n) {
+				write(parent_pipe[1], &val, sizeof(int));
+			} else {
+				write(pipes[(i + 1) % n][1], &val, sizeof(int));
+			}
+			exit(0);
+		}
 	}
-
-
-	// Código del proceso padre
-
-	write(pipes[start][1], &buffer[0], sizeof(int));
 
 	// Cierro los extremos de pipes que no uso
 	for (int i = 0; i < n; i++) {
@@ -69,62 +78,18 @@ int main(int argc, char **argv)
 
 	// Leer resultado final desde el pipe especial
 	int resultado_final;
-	read(parent_pipe[0], &resultado_final, sizeof(int));
+	write(pipes[start][1], &buffer[0], sizeof(int));
+	close(pipes[start][1]);
 
-	printf("Resultado final: %d\n", resultado_final);
+	read(parent_pipe[0], &resultado_final, sizeof(int));
+	close(parent_pipe[0]);
 
 	// Esperar que terminen los hijos
 	for (int i = 0; i < n; i++) {
 	    wait(&status); 
 	}
 
+	printf("Resultado final: %d\n", resultado_final);
 	return 0;
 }
 
-void child_process(int i, int n, int start, int pipes[][2], int parent_pipe[2]) {
-    // Cerrar todos los pipes que no necesito
-    for (int j = 0; j < n; j++) {
-        if (j != i) close(pipes[j][1]);  // solo escribo en pipes[i][1]
-        if (j != (i - 1 + n) % n && !(i == start && j == i)) {
-            close(pipes[j][0]);  // solo leo de mi predecesor o del padre si soy start
-        }
-    }
-
-    close(parent_pipe[0]); // nunca leo del pipe padre
-
-    int num;
-
-    if (i == start) {
-        // 1. Leo del padre
-        read(pipes[i][0], &num, sizeof(int));
-        printf("[Hijo %d] Recibí %d del padre\n", i, num);
-
-        // 2. Envío al siguiente sin incrementar
-        write(pipes[i][1], &num, sizeof(int));
-        printf("[Hijo %d] Envié %d al hijo %d\n", i, num, (i + 1) % n);
-
-        // 3. Leo la vuelta desde el predecesor
-        read(pipes[(i - 1 + n) % n][0], &num, sizeof(int));
-        printf("[Hijo %d] Recibí %d del hijo %d (vuelta)\n", i, num, (i - 1 + n) % n);
-
-        // 4. Incremento final y envío al padre
-        num++;
-        printf("[Hijo %d] Incremento final a %d\n", i, num);
-
-        write(parent_pipe[1], &num, sizeof(int));
-        printf("[Hijo %d] Envié %d al padre\n", i, num);
-
-    } else {
-        // Resto de procesos
-        read(pipes[(i - 1 + n) % n][0], &num, sizeof(int));
-        printf("[Hijo %d] Recibí %d del hijo %d\n", i, num, (i - 1 + n) % n);
-
-        num++;
-        printf("[Hijo %d] Incremento a %d\n", i, num);
-
-        write(pipes[i][1], &num, sizeof(int));
-        printf("[Hijo %d] Envié %d al hijo %d\n", i, num, (i + 1) % n);
-    }
-
-    exit(0);
-}
