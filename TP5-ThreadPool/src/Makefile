@@ -2,6 +2,9 @@
 CXX = g++
 CXXFLAGS = -std=c++11 -Wall -pthread -g
 
+MAIN ?= main
+SRC = thread-pool.cc Semaphore.cc $(MAIN).cc
+
 # Build targets
 TARGET = threadpool
 SRC = thread-pool.cc Semaphore.cc main.cc
