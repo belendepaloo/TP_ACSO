@@ -57,15 +57,15 @@ void ThreadPool::dispatcher() {
         bool assigned = false;
         while (!assigned && !done) {
             for (size_t i = 0; i < wts.size(); ++i) {
-                lock_guard<mutex> wlock(wts[i].mtx);
-                if (wts[i].available) {
-                    wts[i].thunk = task;
-                    wts[i].available = false;
-                    wts[i].ready.signal();
-                    assigned = true;
-                    break;
-                }
+            unique_lock<mutex> wlock(wts[i].mtx);
+            if (wts[i].available) {
+                wts[i].available = false;       // Reservar primero
+                wts[i].thunk = task;            // Asignar tarea
+                wts[i].ready.signal();          // Despertar worker
+                assigned = true;
+                break;
             }
+        }
 
             if (!assigned) {
                 this_thread::yield();
