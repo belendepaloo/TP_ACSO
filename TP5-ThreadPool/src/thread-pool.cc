@@ -24,16 +24,19 @@ void ThreadPool::worker(int id) {
     while (true) {
         wts[id].ready.wait();
         if (done) break;
+
+        function<void()> task;
         {
             lock_guard<mutex> lg(wts[id].mtx);
-            if (wts[id].thunk) {
-                wts[id].thunk();
-                wts[id].thunk = nullptr;
-            }
+            task = wts[id].thunk;
+            wts[id].thunk = nullptr;
             wts[id].available = true;
         }
+
+        if (task) task();  // ejecutar afuera del lock
     }
 }
+
 
 void ThreadPool::dispatcher() {
     while (true) {
