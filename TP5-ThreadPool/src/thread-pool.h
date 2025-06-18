@@ -31,9 +31,9 @@ using namespace std;
 typedef struct worker {
     thread ts;
     function<void(void)> thunk;
-    /**
-     * Complete the definition of the worker_t struct here...
-     **/
+    Semaphore ready{0}; // Semaphore to signal when the worker is ready to execute a task
+    bool available = true; // Indicates if the worker is available for new tasks
+    mutex mtx; // Mutex to protect access to the worker's state
 } worker_t;
 
 class ThreadPool {
@@ -74,6 +74,8 @@ class ThreadPool {
     vector<worker_t> wts;                   // worker thread handles. you may want to change/remove this
     bool done;                              // flag to indicate the pool is being destroyed
     mutex queueLock;                        // mutex to protect the queue of tasks
+    queue<function<void(void)>> taskQueue;
+    Semaphore tasksPending{0};  
 
     /* It is incomplete, there should be more private variables to manage the structures... 
     * *
