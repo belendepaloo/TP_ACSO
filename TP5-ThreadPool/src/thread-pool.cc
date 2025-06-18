@@ -20,23 +20,20 @@ ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), done(false) {
     });
 }
 
-    void ThreadPool::worker(int id) {
-        while (true) {
-            wts[id].ready.wait();
-            if (done) break;
-
-            function<void()> task;
-            {
-                lock_guard<mutex> lg(wts[id].mtx);
-                task = wts[id].thunk;
+void ThreadPool::worker(int id) {
+    while (true) {
+        wts[id].ready.wait();
+        if (done) break;
+        {
+            lock_guard<mutex> lg(wts[id].mtx);
+            if (wts[id].thunk) {
+                wts[id].thunk();
                 wts[id].thunk = nullptr;
-                wts[id].available = true;
             }
-
-            if (task) task();  // Ejecutá fuera del lock
+            wts[id].available = true;
         }
     }
-
+}
 
 void ThreadPool::dispatcher() {
     while (true) {
@@ -66,7 +63,6 @@ void ThreadPool::dispatcher() {
                 wts[i].thunk = task;            // Asignar tarea
                 wts[i].ready.signal();          // Despertar worker
                 assigned = true;
-                this_thread::yield();
                 break;
             }
         }
@@ -141,12 +137,6 @@ ThreadPool::~ThreadPool() {
     if (dt.joinable()) {
         dt.join();
     }
-    
-    {
-        lock_guard<mutex> lock(queueLock);
-        while (!taskQueue.empty()) taskQueue.pop();
-    }
-
     active = false;
 }
 
