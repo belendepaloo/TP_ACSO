@@ -16,6 +16,7 @@
 #include <vector>      // for vector
 #include "Semaphore.h" // for Semaphore
 #include <queue>
+#include <atomic>
 
 
 using namespace std;
@@ -79,6 +80,8 @@ class ThreadPool {
     queue<function<void(void)>> taskQueue;
     Semaphore tasksPending{0};  
     bool active = true;
+    atomic<int> tasksTotal{0};
+    atomic<int> tasksDone{0};   
 
     /* It is incomplete, there should be more private variables to manage the structures... 
     * *

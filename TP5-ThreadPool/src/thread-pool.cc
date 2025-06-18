@@ -33,7 +33,10 @@ void ThreadPool::worker(int id) {
             wts[id].available = true;
         }
 
-        if (task) task();  // ejecutar afuera del lock
+        if (task) {
+            task();         // ejecuta tarea
+            tasksDone++;    // marca como completada
+        }
     }
 }
 
@@ -87,6 +90,7 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
     {
         lock_guard<mutex> lock(queueLock);
         taskQueue.push(thunk);
+        tasksTotal++;
     }
 
     tasksPending.signal();
@@ -95,26 +99,11 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
 
 void ThreadPool::wait() {
     while (true) {
-        bool allWorkersIdle = true;
-        {
-            lock_guard<mutex> lock(queueLock);
-            if (!taskQueue.empty()) {
-                allWorkersIdle = false;
-            }
-        }
-
-        // Verificar que todos los workers estén disponibles
-        for (size_t i = 0; i < wts.size() && allWorkersIdle; ++i) {
-            lock_guard<mutex> wlock(wts[i].mtx);
-            if (!wts[i].available) {
-                allWorkersIdle = false;
-            }
-        }
-
-        if (allWorkersIdle) break;
+        if (tasksDone.load() == tasksTotal.load()) break;
         this_thread::yield();
     }
 }
+
 
 ThreadPool::~ThreadPool() {
     wait();       // Esperar a que se terminen todas las tareas
