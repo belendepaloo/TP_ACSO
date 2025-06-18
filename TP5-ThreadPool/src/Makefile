@@ -7,7 +7,7 @@ SRC = thread-pool.cc Semaphore.cc $(MAIN).cc
 
 # Build targets
 TARGET = threadpool
-SRC = thread-pool.cc Semaphore.cc main.cc
+SRC = thread-pool.cc Semaphore.cc $(MAIN).cc
 
 # Link the target with object files
 $(TARGET): $(SRC)
