@@ -22,13 +22,11 @@ ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), done(false) {
 
 void ThreadPool::worker(int id) {
     while (true) {
-        cout << "Worker " << id << " arrancó y está esperando trabajo." << endl;
         wts[id].ready.wait();
         if (done) break;
         {
             lock_guard<mutex> lg(wts[id].mtx);
             if (wts[id].thunk) {
-                cout << "Worker " << id << " va a ejecutar una tarea." << endl;
                 wts[id].thunk();
                 wts[id].thunk = nullptr;
             }
@@ -49,8 +47,6 @@ void ThreadPool::dispatcher() {
         {
             lock_guard<mutex> lock(queueLock);
             if (!taskQueue.empty()) {
-                cout << "Dispatcher tomó una tarea de la cola." << endl;
-
                 task = taskQueue.front();
                 taskQueue.pop();
             } else {
@@ -65,8 +61,6 @@ void ThreadPool::dispatcher() {
                 if (wts[i].available) {
                     wts[i].thunk = task;
                     wts[i].available = false;
-                    cout << "Dispatcher asignó tarea al worker " << i << "." << endl;
-
                     wts[i].ready.signal();
                     assigned = true;
                     break;
