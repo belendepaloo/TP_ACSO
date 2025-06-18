@@ -7,6 +7,7 @@
 #include "thread-pool.h"
 using namespace std;
 #include <iostream>
+#include <queue>
 
 ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), done(false) {
     for (size_t i = 0; i < numThreads; ++i) {
