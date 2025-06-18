@@ -75,6 +75,12 @@ void ThreadPool::dispatcher() {
 }
 
 void ThreadPool::schedule(const function<void(void)>& thunk) {
+        if (!thunk) {
+        throw invalid_argument("No se puede encolar una función nula.");
+        }
+        if (!active) {
+        throw logic_error("No se puede llamar a schedule() sobre un ThreadPool destruido.");
+    }
     {
         lock_guard<mutex> lock(queueLock);
         taskQueue.push(thunk);
@@ -131,5 +137,6 @@ ThreadPool::~ThreadPool() {
     if (dt.joinable()) {
         dt.join();
     }
+    active = false;
 }
 

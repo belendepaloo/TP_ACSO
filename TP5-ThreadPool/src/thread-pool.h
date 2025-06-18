@@ -78,6 +78,7 @@ class ThreadPool {
     mutex queueLock;                        // mutex to protect the queue of tasks
     queue<function<void(void)>> taskQueue;
     Semaphore tasksPending{0};  
+    bool active = true;
 
     /* It is incomplete, there should be more private variables to manage the structures... 
     * *
