@@ -8,7 +8,7 @@
 #else
   #define RUNNING_ON_HELGRIND 0
 #endif
-
+#include <array>
 #include "thread-pool.h"
 #include <iostream>
 #include <vector>
