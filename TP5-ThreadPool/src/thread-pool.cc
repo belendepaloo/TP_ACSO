@@ -33,7 +33,7 @@ void ThreadPool::worker(int id) {
         }
 
         if (task) {
-            task();          // ejecuta fuera del lock
+            task();
             tasksDone++;
         }
 
