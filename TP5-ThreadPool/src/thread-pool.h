@@ -74,12 +74,13 @@ class ThreadPool {
     void worker(int id);
     void dispatcher();
     thread dt;                              // dispatcher thread handle
-    vector<worker_t> wts;                   // worker thread handles. you may want to change/remove this
-    std::atomic<bool> done;                              // flag to indicate the pool is being destroyed
+    vector<worker_t> wts; 
+    std::atomic<bool> done{false};                  // worker thread handles. you may want to change/remove this                             // flag to indicate the pool is being destroyed
     mutex queueLock;                        // mutex to protect the queue of tasks
     queue<function<void(void)>> taskQueue;
     Semaphore tasksPending{0};  
     bool active = true;
+    std::mutex tasksMutex;
     atomic<int> tasksTotal{0};
     atomic<int> tasksDone{0};   
 

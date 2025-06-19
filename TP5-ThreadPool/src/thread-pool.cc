@@ -34,6 +34,7 @@ void ThreadPool::worker(int id) {
 
         if (task) {
             task();
+            std::lock_guard<std::mutex> lock(tasksMutex);
             tasksDone++;
         }
 
@@ -93,8 +94,12 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
         throw logic_error("No se puede llamar a schedule() sobre un ThreadPool destruido.");
     }
     {
-        lock_guard<mutex> lock(queueLock);
+        std::lock_guard<std::mutex> lock(queueLock);
         taskQueue.push(thunk);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(tasksMutex);
         tasksTotal++;
     }
 
@@ -104,6 +109,7 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
 
 void ThreadPool::wait() {
     while (true) {
+        std::lock_guard<std::mutex> lock(tasksMutex);
         if (tasksDone.load() == tasksTotal.load()) break;
         this_thread::yield();
     }
