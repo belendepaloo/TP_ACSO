@@ -3,152 +3,125 @@
 #include <iostream>
 using namespace std;
 
-ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), availableWorkers(numThreads) {
+ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), done(false) {
     for (size_t i = 0; i < numThreads; ++i) {
         wts[i].id = i;
-        wts[i].available = true;
-        wts[i].ts = thread(&ThreadPool::worker, this, i);
+        wts[i].ready = false;
+        wts[i].ts = thread([this, i]() { worker(i); });
     }
-    dt = thread(&ThreadPool::dispatcher, this);
+
+    dt = thread([this]() { dispatcher(); });
 }
 
 void ThreadPool::schedule(const function<void(void)>& thunk) {
-    if (!thunk) {
-        throw invalid_argument("Cannot schedule a null thunk");
-    }
+    if (!thunk) throw invalid_argument("Null task");
 
     {
-        lock_guard<mutex> lock(waitLock);  // reemplaza doneMutex
-        if (done) {
-            throw runtime_error("Schedule called on destroyed ThreadPool");
-        }
+        lock_guard<mutex> lock(waitMutex);
+        if (done) throw runtime_error("Scheduling on a destroyed ThreadPool");
         pendingTasks++;
     }
 
     {
-        lock_guard<mutex> lock(queueLock);
+        lock_guard<mutex> lock(taskMutex);
         tasks.push(thunk);
     }
 
-    queueCV.notify_one();
+    taskAvailable.notify_one();
 }
 
-
 void ThreadPool::wait() {
-    unique_lock<mutex> lock(waitLock);
-    waitCV.wait(lock, [this]() {
-        return pendingTasks == 0;
-    });
+    unique_lock<mutex> lock(waitMutex);
+    waitCond.wait(lock, [this]() { return pendingTasks == 0; });
 }
 
 ThreadPool::~ThreadPool() {
+    wait();
+
     {
-        unique_lock<mutex> lock(waitLock);
-        waitCV.wait(lock, [this] {
-            return pendingTasks == 0 && tasks.empty();
-        });
+        lock_guard<mutex> lock(waitMutex);
         done = true;
     }
 
-    queueCV.notify_all();
+    taskAvailable.notify_all();
 
-    for (size_t i = 0; i < wts.size(); ++i) {
-        availableWorkers.signal();
-    }
-
-    for (auto& wt : wts) {
-        wt.semaphore.signal();
-    }
-
-    {
-        lock_guard<mutex> lock(waitLock);
-        waitCV.notify_all();
-    }
-
-    for (auto& wt : wts) {
-        if (wt.ts.joinable()) {
-            wt.ts.join();
+    for (auto& w : wts) {
+        {
+            lock_guard<mutex> lock(w.mtx);
+            w.ready = true;
         }
+        w.cv.notify_one();
     }
 
-    if (dt.joinable()) {
-        dt.join();
+    if (dt.joinable()) dt.join();
+
+    for (auto& w : wts) {
+        if (w.ts.joinable()) w.ts.join();
     }
 }
-
 
 void ThreadPool::worker(int id) {
+    worker_t& w = wts[id];
     while (true) {
-        wts[id].semaphore.wait();
+        unique_lock<mutex> lock(w.mtx);
+        w.cv.wait(lock, [&]() { return w.ready || done; });
 
+        if (done) break;
+
+        function<void()> job;
         {
-            lock_guard<mutex> lock(waitLock);
-            if (done) break;  // ahora protegido
+            lock_guard<mutex> tlock(w.mtx);
+            job = w.task;
+            w.task = nullptr;
+            w.ready = false;
         }
 
-        {
-            lock_guard<mutex> lock(wts[id].mtx);
-            if (wts[id].thunk) {
-                wts[id].thunk();
-                wts[id].thunk = nullptr;
-            }
-        }
+        if (job) job();
 
         {
-            lock_guard<mutex> lock(wts[id].mtx);
-            wts[id].available = true;
-        }
-
-        {
-            lock_guard<mutex> lock(waitLock);
+            lock_guard<mutex> lock(waitMutex);
             pendingTasks--;
-            if (pendingTasks == 0) {
-                waitCV.notify_all();
-            }
+            if (pendingTasks == 0) waitCond.notify_all();
         }
 
-        availableWorkers.signal();
+        {
+            lock_guard<mutex> lock(wtQueueMutex);
+            idleWorkers.push(id);
+        }
+
+        workerReady.notify_one();
     }
 }
-
 
 void ThreadPool::dispatcher() {
     while (true) {
-        function<void(void)> nextTask;
-
+        function<void()> job;
         {
-            unique_lock<mutex> lock(queueLock);
-            queueCV.wait(lock, [this]() {
-                return !tasks.empty() || done;
-            });
+            unique_lock<mutex> lock(taskMutex);
+            taskAvailable.wait(lock, [this]() { return !tasks.empty() || done; });
             if (done && tasks.empty()) break;
-
-            nextTask = move(tasks.front());
+            job = tasks.front();
             tasks.pop();
         }
 
-        availableWorkers.wait();
-
-        bool assigned = false;
-        for (auto& wt : wts) {
-            lock_guard<mutex> lg(wt.mtx);
-            if (wt.available) {
-                wt.available = false;
-                wt.thunk = nextTask;
-                wt.semaphore.signal();
-                assigned = true;
-                break;
-            }
+        int id;
+        {
+            unique_lock<mutex> lock(wtQueueMutex);
+            workerReady.wait(lock, [this]() { return !idleWorkers.empty(); });
+            id = idleWorkers.front();
+            idleWorkers.pop();
         }
 
-        if (!assigned) {
-            lock_guard<mutex> lock(queueLock);
-            tasks.push(nextTask);
-            availableWorkers.signal();
+        worker_t& w = wts[id];
+        {
+            lock_guard<mutex> lock(w.mtx);
+            w.task = job;
+            w.ready = true;
         }
+        w.cv.notify_one();
     }
 
-    for (auto& wt : wts) {
-        wt.semaphore.signal();
+    for (auto& w : wts) {
+        w.cv.notify_one();
     }
 }

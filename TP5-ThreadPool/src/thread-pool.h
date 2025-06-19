@@ -8,19 +8,17 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
-#include <atomic>
-#include "Semaphore.h"
 
 using namespace std;
 
-typedef struct worker {
-    thread ts;                       // Hilo del worker
-    function<void(void)> thunk;     // Tarea asignada al worker
-    bool available;                 // Indica si el worker está libre
-    Semaphore semaphore{0};         // Para esperar señales del dispatcher
-    int id;                         // ID del worker
-    mutex mtx;                      // Protege 'thunk' y 'available'
-} worker_t;
+struct worker_t {
+    int id;
+    thread ts;
+    function<void()> task;
+    bool ready = false;
+    mutex mtx;
+    condition_variable cv;
+};
 
 class ThreadPool {
 public:
@@ -29,24 +27,30 @@ public:
     void wait();
     ~ThreadPool();
 
+    // Evita copia y asignación
+    ThreadPool(const ThreadPool& other) = delete;
+    ThreadPool& operator=(const ThreadPool& other) = delete;
+
 private:
-    void worker(int id);            // Función ejecutada por cada worker
-    void dispatcher();              // Función ejecutada por el dispatcher
+    void worker(int id);
+    void dispatcher();
 
-    thread dt;                      // Hilo dispatcher
-    vector<worker_t> wts;           // Vector de workers
-    queue<function<void(void)>> tasks; // Cola de tareas
-    mutex queueLock;               // Protege el acceso a la cola de tareas
-    condition_variable_any queueCV;// Notifica al dispatcher sobre nuevas tareas
-    Semaphore availableWorkers;    // Controla cuántos workers están libres
-    condition_variable_any waitCV; // Para que wait() sepa cuándo terminar
-    mutex waitLock;   
-    bool done = false;
-    int pendingTasks = 0;
+    bool done;
+    int pendingTasks;
 
-    // Evita la copia y asignación
-    ThreadPool(const ThreadPool& original) = delete;
-    ThreadPool& operator=(const ThreadPool& rhs) = delete;
+    thread dt;                          // Dispatcher thread
+    vector<worker_t> wts;               // Worker pool
+
+    queue<function<void()>> tasks;      // Task queue
+    mutex taskMutex;                    // Protects task queue
+    condition_variable taskAvailable;   // Signals when tasks are available
+
+    queue<int> idleWorkers;             // IDs of available workers
+    mutex wtQueueMutex;                 // Protects idleWorkers queue
+    condition_variable workerReady;     // Signals when workers are available
+
+    mutex waitMutex;                    // Protects pendingTasks + done
+    condition_variable waitCond;        // Notifies wait() when all tasks are done
 };
 
 #endif
