@@ -26,12 +26,9 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
         tasks.push(thunk);
     }
     {
-    lock_guard<mutex> lock(queueLock);
-    if (done) return;
-    tasks.push(thunk);
-    pendingTasks++; 
-}
-
+        lock_guard<mutex> waitLockGuard(waitLock);
+        pendingTasks++;
+    }
     queueCV.notify_one();
 }
 
@@ -84,9 +81,12 @@ ThreadPool::~ThreadPool() {
 
 void ThreadPool::worker(int id) {
     while (true) {
+        cerr << "[worker " << id << "] esperando tarea..." << endl;
         wts[id].semaphore.wait();
+        cerr << "[worker " << id << "] tarea recibida." << endl;
 
         if (done) {
+            cerr << "[worker " << id << "] finalizando." << endl;
             break;
         }
 
@@ -112,6 +112,7 @@ void ThreadPool::worker(int id) {
                 }
             }
             availableWorkers.signal();
+            cerr << "[worker " << id << "] terminó tarea, queda " << pendingTasks.load() << " pendientes." << endl;
         }
     }
 }
@@ -126,7 +127,9 @@ void ThreadPool::dispatcher() {
             if (tasks.empty()) continue;
         }
 
+        cerr << "[dispatcher] esperando worker disponible..." << endl;
         availableWorkers.wait();
+        cerr << "[dispatcher] worker disponible encontrado." << endl;
 
         {
             lock_guard<mutex> lock(queueLock);
@@ -137,6 +140,7 @@ void ThreadPool::dispatcher() {
                     tasks.pop();
                     wt.available = false;
                     wt.semaphore.signal();
+                    cerr << "[dispatcher] tarea asignada a worker " << wt.id << endl;
                 }
             }
         }
