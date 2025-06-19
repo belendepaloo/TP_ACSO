@@ -13,11 +13,13 @@ SRC = thread-pool.cc Semaphore.cc $(MAIN).cc
 $(TARGET): $(SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
+# Para correr los tests de la cátedra:
 custom:
-	$(CXX) $(CXXFLAGS) -o $(TARGET) thread-pool.cc Semaphore.cc test_custom.cc
+	g++ -std=c++11 -Wall -pthread -g -o threadpool thread-pool.cc Semaphore.cc tpcustomtest.cc
 
 test:
 	g++ -std=c++11 -Wall -pthread -g -o threadpool thread-pool.cc Semaphore.cc tptest.cc
+
 
 # Clean up build artifacts
 clean:
