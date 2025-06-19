@@ -130,5 +130,7 @@ ThreadPool::~ThreadPool() {
         dt.join();
     }
     active = false;
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+
 }
 
