@@ -30,15 +30,20 @@ void ThreadPool::worker(int id) {
             lock_guard<mutex> lg(wts[id].mtx);
             task = wts[id].thunk;
             wts[id].thunk = nullptr;
-            wts[id].available = true;
         }
 
         if (task) {
-            task();         // ejecuta tarea
-            tasksDone++;    // marca como completada
+            task();          // ejecuta fuera del lock
+            tasksDone++;
+        }
+
+        {
+            lock_guard<mutex> lg(wts[id].mtx);
+            wts[id].available = true;
         }
     }
 }
+
 
 
 void ThreadPool::dispatcher() {
