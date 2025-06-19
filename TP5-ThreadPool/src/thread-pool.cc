@@ -37,6 +37,7 @@ void ThreadPool::wait() {
 
 ThreadPool::~ThreadPool() {
     destructionStarted = true;
+    
 
     {
         unique_lock<mutex> lock(waitLock);
