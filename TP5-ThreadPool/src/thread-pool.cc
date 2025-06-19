@@ -24,6 +24,9 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
         lock_guard<mutex> lock(queueLock);
         if (done) return;
         tasks.push(thunk);
+    }
+    {
+        lock_guard<mutex> waitLockGuard(waitLock);
         pendingTasks++;
     }
     queueCV.notify_one();
@@ -98,10 +101,12 @@ void ThreadPool::worker(int id) {
                 lock_guard<mutex> wtlock(wts[id].mtx);
                 wts[id].available = true;
             }
-            pendingTasks--;
-            if (pendingTasks == 0) {
+            {
                 lock_guard<mutex> waitLockGuard(waitLock);
-                waitCV.notify_all();
+                pendingTasks--;
+                if (pendingTasks == 0) {
+                    waitCV.notify_all();
+                }
             }
             availableWorkers.signal();
         }
