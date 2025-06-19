@@ -42,18 +42,21 @@ void ThreadPool::wait() {
 ThreadPool::~ThreadPool() {
     destructionStarted = true;
 
-    // Esperar a que todas las tareas se ejecuten
-    wait();
+    {
+        unique_lock<mutex> lock(waitLock);
+        waitCV.wait(lock, [this] {
+            lock_guard<mutex> qlock(queueLock);
+            return pendingTasks == 0 && tasks.empty();
+        });
+    }
 
     {
         lock_guard<mutex> lock(queueLock);
         done = true;
     }
 
-    // Notificar al dispatcher
     queueCV.notify_all();
 
-    // Despertar a todos los workers para que puedan salir
     for (size_t i = 0; i < wts.size(); ++i) {
         availableWorkers.signal();
     }
