@@ -41,38 +41,32 @@ void ThreadPool::wait() {
 
 ThreadPool::~ThreadPool() {
     destructionStarted = true;
+
+    // Esperar a que todas las tareas se ejecuten
     wait();
-    
+
     {
         lock_guard<mutex> lock(queueLock);
         done = true;
-        // Clear pending tasks
-        while (!tasks.empty()) {
-            tasks.pop();
-            pendingTasks--;
-        }
     }
-    
-    // Wake up all threads
+
+    // Notificar al dispatcher
     queueCV.notify_all();
-    
-    // Signal all workers to exit (multiple signals)
+
+    // Despertar a todos los workers para que puedan salir
     for (size_t i = 0; i < wts.size(); ++i) {
         availableWorkers.signal();
     }
-    
-    // Signal each worker individually
+
     for (auto& wt : wts) {
         wt.semaphore.signal();
     }
 
-    // Notify waiters
     {
         lock_guard<mutex> lock(waitLock);
         waitCV.notify_all();
     }
 
-    // Join all threads
     for (auto& wt : wts) {
         if (wt.ts.joinable()) {
             wt.ts.join();
@@ -83,6 +77,7 @@ ThreadPool::~ThreadPool() {
         dt.join();
     }
 }
+
 
 void ThreadPool::worker(int id) {
     while (true) {
