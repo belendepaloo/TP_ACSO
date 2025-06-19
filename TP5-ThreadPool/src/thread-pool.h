@@ -17,6 +17,8 @@
 #include <queue>       // for queue
 #include <condition_variable> // for condition_variable
 #include "Semaphore.h" // for Semaphore
+#include <atomic>
+
 
 using namespace std;
 
