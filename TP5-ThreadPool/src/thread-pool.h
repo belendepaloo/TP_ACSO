@@ -1,12 +1,3 @@
-/**
- * File: thread-pool.h
- * -------------------
- * This class defines the ThreadPool class, which accepts a collection
- * of thunks (which are zero-argument functions that don't return a value)
- * and schedules them in a FIFO manner to be executed by a constant number
- * of child threads that exist solely to invoke previously scheduled thunks.
- */
-
 #ifndef _thread_pool_
 #define _thread_pool_
 
@@ -16,6 +7,7 @@
 #include <vector>      // for vector
 #include <queue>       // for queue
 #include <condition_variable> // for condition_variable
+#include <atomic>      // for atomic types
 #include "Semaphore.h" // for Semaphore
 
 using namespace std;
