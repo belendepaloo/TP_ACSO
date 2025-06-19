@@ -110,12 +110,9 @@ void ThreadPool::worker(int id) {
                 if (pendingTasks == 0) {
                     waitCV.notify_all();
                 }
+                cerr << "[worker " << id << "] terminó tarea, queda " << pendingTasks << " pendientes." << endl;
             }
             availableWorkers.signal();
-{
-    lock_guard<mutex> lock(waitLock);
-    cerr << "[worker " << id << "] terminó tarea, queda " << pendingTasks << " pendientes." << endl;
-}
         }
     }
 }
