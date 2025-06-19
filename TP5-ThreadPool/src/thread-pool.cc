@@ -21,7 +21,7 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
 
     {
         lock_guard<mutex> lock(queueLock);
-        if (done) return; // Silently ignore if we're shutting down
+        if (done) return;
         DOUT << "[schedule] Adding task. Pending: " << pendingTasks + 1 << endl;
         tasks.push(thunk);
         pendingTasks++;
@@ -42,7 +42,7 @@ ThreadPool::~ThreadPool() {
     {
         lock_guard<mutex> lock(queueLock);
         done = true;
-        // Clear pending tasks to allow quick shutdown
+        // Clear pending tasks
         while (!tasks.empty()) {
             tasks.pop();
             pendingTasks--;
@@ -51,9 +51,13 @@ ThreadPool::~ThreadPool() {
     
     // Wake up all threads
     queueCV.notify_all();
-    availableWorkers.signal(wts.size()); // Signal all workers
     
-    // Signal all workers to exit
+    // Signal all workers to exit (multiple signals)
+    for (size_t i = 0; i < wts.size(); ++i) {
+        availableWorkers.signal();
+    }
+    
+    // Signal each worker individually
     for (auto& wt : wts) {
         wt.semaphore.signal();
     }
@@ -64,12 +68,10 @@ ThreadPool::~ThreadPool() {
         waitCV.notify_all();
     }
 
-    // Join all threads with timeout as safety measure
+    // Join all threads
     for (auto& wt : wts) {
         if (wt.ts.joinable()) {
-            if (wt.ts.joinable()) {
-                wt.ts.join();
-            }
+            wt.ts.join();
         }
     }
 
