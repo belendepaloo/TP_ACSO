@@ -4,7 +4,10 @@
 using namespace std;
 
 ThreadPool::ThreadPool(size_t numThreads)
-    : wts(numThreads), done(false), pendingTasks(0) {
+    : done(false),
+      pendingTasks(0),
+      wts(numThreads) {
+
     for (size_t i = 0; i < numThreads; ++i) {
         wts[i].id = i;
         wts[i].ready = false;
