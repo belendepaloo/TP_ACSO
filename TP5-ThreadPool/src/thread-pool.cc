@@ -84,7 +84,6 @@ void ThreadPool::worker(int id) {
             break;
         }
 
-        // Ejecutar la tarea asignada
         {
             lock_guard<mutex> lock(wts[id].mtx);
             if (wts[id].thunk) {
@@ -124,15 +123,14 @@ void ThreadPool::dispatcher() {
         {
             lock_guard<mutex> lock(queueLock);
             for (auto& wt : wts) {
-                 lock_guard<mutex> wtlock(wt.mtx);
-                 if (wt.available && !tasks.empty()) {
-                     wt.thunk = move(tasks.front());
-                     tasks.pop();
-                     wt.available = false;
-                     wt.semaphore.signal();
+                lock_guard<mutex> wtlock(wt.mtx);
+                if (wt.available && !tasks.empty()) {
+                    wt.thunk = move(tasks.front());
+                    tasks.pop();
+                    wt.available = false;
+                    wt.semaphore.signal();
                 }
             }
-
         }
     }
 
