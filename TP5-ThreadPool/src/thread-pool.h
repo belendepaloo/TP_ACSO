@@ -1,55 +1,66 @@
 #ifndef _thread_pool_
 #define _thread_pool_
 
-#include <cstddef>
-#include <functional>
-#include <thread>
-#include <vector>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include <atomic>
-#include "Semaphore.h"
+#include <cstddef>      
+#include <functional>  
+#include <thread>      
+#include <vector>       
+#include <queue>        
+#include <mutex>        
+#include <condition_variable> 
+#include "Semaphore.h" 
 
 using namespace std;
 
+
+/**
+ * @brief Represents a worker in the thread pool.
+ * 
+ * The `worker_t` struct contains information about a worker 
+ * thread in the thread pool. Should be includes the thread object, 
+ * availability status, the task to be executed, and a semaphore 
+ * (or condition variable) to signal when work is ready for the 
+ * worker to process.
+ */
 typedef struct worker {
-    thread ts;                       // hilo del worker
-    function<void(void)> thunk;     // tarea asignada
-    bool available = true;          // estado del worker
-    Semaphore semaphore{0};         // semáforo del worker
-    mutex mtx;                      // protege 'thunk' y 'available'
-    int id = -1;                    // id del worker
+    thread ts;
+    function<void(void)> thunk;
+    Semaphore ready{0};     
+    bool available = true;  
+    mutex mtx;              
 } worker_t;
 
 class ThreadPool {
-public:
+  public:
     ThreadPool(size_t numThreads);
+
     void schedule(const function<void(void)>& thunk);
+
     void wait();
+
     ~ThreadPool();
-
+    
 private:
-    void worker(int id);
-    void dispatcher();
+    void dispatcher();               
+    void worker(int id);            
 
-    vector<worker_t> wts;                  // workers
-    thread dt;                             // dispatcher
-    queue<function<void(void)>> tasks;     // cola de tareas
+    thread dt;                      
+    vector<worker_t> wts;           
 
-    mutex queueLock;                       // protege la cola de tareas
-    condition_variable queueCV;           // para que el dispatcher espere por tareas
+    queue<function<void(void)>> tasks;
+    mutex queueLock;                
 
-    Semaphore availableWorkers;           // semáforo de disponibilidad de workers
+    Semaphore tasksAvailable{0};    
+    Semaphore workersAvailable;    
 
-    mutex doneMutex;                      // protege 'done' y 'pendingTasks'
-    condition_variable waitCV;            // para wait()
-    bool done;                            // indica si el threadpool se está destruyendo
-    int pendingTasks = 0;                 // tareas activas
+    int runningTasks = 0;           
+    mutex doneMutex;                
+    condition_variable_any allDoneCond;
 
-    // evitar copia y asignación
-    ThreadPool(const ThreadPool&) = delete;
-    ThreadPool& operator=(const ThreadPool&) = delete;
+    bool done;                     
+
+    ThreadPool(const ThreadPool& original) = delete;
+    ThreadPool& operator=(const ThreadPool& rhs) = delete;
 };
 
 #endif
