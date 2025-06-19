@@ -26,9 +26,12 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
         tasks.push(thunk);
     }
     {
-        lock_guard<mutex> waitLockGuard(waitLock);
-        pendingTasks++;
-    }
+    lock_guard<mutex> lock(queueLock);
+    if (done) return;
+    tasks.push(thunk);
+    pendingTasks++; 
+}
+
     queueCV.notify_one();
 }
 
