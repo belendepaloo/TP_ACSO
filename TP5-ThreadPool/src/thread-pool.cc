@@ -21,6 +21,7 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
 
     {
         lock_guard<mutex> lock(queueLock);
+        if (done) return; // Silently ignore if we're shutting down
         DOUT << "[schedule] Adding task. Pending: " << pendingTasks + 1 << endl;
         tasks.push(thunk);
         pendingTasks++;
@@ -29,12 +30,10 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
 }
 
 void ThreadPool::wait() {
-    DOUT << "[wait] Waiting for all tasks to complete." << endl;
     unique_lock<mutex> lock(waitLock);
     waitCV.wait(lock, [this] { 
-        return pendingTasks == 0; 
+        return pendingTasks == 0 || destructionStarted.load(); 
     });
-    DOUT << "[wait] All tasks completed." << endl;
 }
 
 ThreadPool::~ThreadPool() {
@@ -43,21 +42,34 @@ ThreadPool::~ThreadPool() {
     {
         lock_guard<mutex> lock(queueLock);
         done = true;
+        // Clear pending tasks to allow quick shutdown
+        while (!tasks.empty()) {
+            tasks.pop();
+            pendingTasks--;
+        }
     }
     
     // Wake up all threads
     queueCV.notify_all();
-    availableWorkers.signal();
+    availableWorkers.signal(wts.size()); // Signal all workers
     
     // Signal all workers to exit
     for (auto& wt : wts) {
         wt.semaphore.signal();
     }
 
-    // Join all threads
+    // Notify waiters
+    {
+        lock_guard<mutex> lock(waitLock);
+        waitCV.notify_all();
+    }
+
+    // Join all threads with timeout as safety measure
     for (auto& wt : wts) {
         if (wt.ts.joinable()) {
-            wt.ts.join();
+            if (wt.ts.joinable()) {
+                wt.ts.join();
+            }
         }
     }
 
@@ -68,25 +80,26 @@ ThreadPool::~ThreadPool() {
 
 void ThreadPool::worker(int id) {
     while (true) {
-        DOUT << "[worker " << id << "] Waiting for task." << endl;
         wts[id].semaphore.wait();
 
         if (done) {
-            DOUT << "[worker " << id << "] Exiting." << endl;
             break;
         }
 
-        DOUT << "[worker " << id << "] Running task." << endl;
-        wts[id].thunk();
+        // Execute task if available
+        if (wts[id].thunk) {
+            wts[id].thunk();
+            wts[id].thunk = nullptr;
+        }
 
         {
             lock_guard<mutex> lock(queueLock);
             wts[id].available = true;
-            int remaining = --pendingTasks;
+            if (wts[id].thunk == nullptr) {
+                pendingTasks--;
+            }
 
-            DOUT << "[worker " << id << "] Task done. Remaining: " << remaining << endl;
-
-            if (remaining == 0) {
+            if (pendingTasks == 0) {
                 lock_guard<mutex> waitLockGuard(waitLock);
                 waitCV.notify_all();
             }
@@ -100,16 +113,19 @@ void ThreadPool::dispatcher() {
     while (true) {
         {
             unique_lock<mutex> lock(queueLock);
-            DOUT << "[dispatcher] Waiting for tasks or shutdown signal." << endl;
-            queueCV.wait(lock, [this] { return !tasks.empty() || done; });
+            if (done && tasks.empty()) {
+                break;
+            }
+            
+            queueCV.wait(lock, [this] { 
+                return !tasks.empty() || done; 
+            });
             
             if (done && tasks.empty()) {
-                DOUT << "[dispatcher] Shutting down." << endl;
                 break;
             }
 
             if (tasks.empty()) {
-                DOUT << "[dispatcher] Woke up but no tasks." << endl;
                 continue;
             }
         }
@@ -120,7 +136,6 @@ void ThreadPool::dispatcher() {
             lock_guard<mutex> lock(queueLock);
             for (auto& wt : wts) {
                 if (wt.available) {
-                    DOUT << "[dispatcher] Assigning task to worker " << wt.id << endl;
                     wt.thunk = move(tasks.front());
                     tasks.pop();
                     wt.available = false;
@@ -129,5 +144,10 @@ void ThreadPool::dispatcher() {
                 }
             }
         }
+    }
+    
+    // Ensure all workers wake up to check done flag
+    for (auto& wt : wts) {
+        wt.semaphore.signal();
     }
 }
