@@ -15,6 +15,9 @@ ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), availableWorkers(nu
 }
 
 void ThreadPool::schedule(const function<void(void)>& thunk) {
+    if (!thunk) {
+        throw invalid_argument("Cannot schedule a null thunk");
+    }
     if (destructionStarted.load()) {
         throw runtime_error("Schedule called after destruction started");
     }
