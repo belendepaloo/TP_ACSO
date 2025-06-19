@@ -2,10 +2,12 @@
 #include <iostream>
 using namespace std;
 
-#define DEBUG true
-#define DOUT if (DEBUG) cout
-
-ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), availableWorkers(numThreads) {
+ThreadPool::ThreadPool(size_t numThreads) : 
+    wts(numThreads), 
+    availableWorkers(numThreads),
+    done(false),
+    destructionStarted(false) {
+    
     for (size_t i = 0; i < numThreads; ++i) {
         wts[i].id = i;
         wts[i].available = true;
@@ -15,6 +17,10 @@ ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), availableWorkers(nu
 }
 
 void ThreadPool::schedule(const function<void(void)>& thunk) {
+    if (!thunk) {
+        throw invalid_argument("Cannot schedule nullptr function");
+    }
+
     if (destructionStarted.load()) {
         throw runtime_error("Schedule called after destruction started");
     }
@@ -22,7 +28,6 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
     {
         lock_guard<mutex> lock(queueLock);
         if (done) return;
-        DOUT << "[schedule] Adding task. Pending: " << pendingTasks + 1 << endl;
         tasks.push(thunk);
         pendingTasks++;
     }
@@ -39,33 +44,20 @@ void ThreadPool::wait() {
 ThreadPool::~ThreadPool() {
     destructionStarted = true;
     
+    // Wait for all tasks to complete
+    wait();
+    
     {
         lock_guard<mutex> lock(queueLock);
         done = true;
-        // Clear pending tasks
-        while (!tasks.empty()) {
-            tasks.pop();
-            pendingTasks--;
-        }
     }
     
     // Wake up all threads
     queueCV.notify_all();
     
-    // Signal all workers to exit (multiple signals)
-    for (size_t i = 0; i < wts.size(); ++i) {
-        availableWorkers.signal();
-    }
-    
-    // Signal each worker individually
+    // Signal all workers to exit
     for (auto& wt : wts) {
         wt.semaphore.signal();
-    }
-
-    // Notify waiters
-    {
-        lock_guard<mutex> lock(waitLock);
-        waitCV.notify_all();
     }
 
     // Join all threads
@@ -84,13 +76,14 @@ void ThreadPool::worker(int id) {
     while (true) {
         wts[id].semaphore.wait();
 
-        if (done) {
-            break;
-        }
+        if (done) break;
 
-        // Execute task if available
         if (wts[id].thunk) {
-            wts[id].thunk();
+            try {
+                wts[id].thunk();
+            } catch (...) {
+                // Handle task exceptions
+            }
             wts[id].thunk = nullptr;
         }
 
@@ -105,7 +98,6 @@ void ThreadPool::worker(int id) {
                 lock_guard<mutex> waitLockGuard(waitLock);
                 waitCV.notify_all();
             }
-
             availableWorkers.signal();
         }
     }
@@ -115,21 +107,12 @@ void ThreadPool::dispatcher() {
     while (true) {
         {
             unique_lock<mutex> lock(queueLock);
-            if (done && tasks.empty()) {
-                break;
-            }
-            
             queueCV.wait(lock, [this] { 
                 return !tasks.empty() || done; 
             });
             
-            if (done && tasks.empty()) {
-                break;
-            }
-
-            if (tasks.empty()) {
-                continue;
-            }
+            if (done && tasks.empty()) break;
+            if (tasks.empty()) continue;
         }
 
         availableWorkers.wait();
@@ -146,10 +129,5 @@ void ThreadPool::dispatcher() {
                 }
             }
         }
-    }
-    
-    // Ensure all workers wake up to check done flag
-    for (auto& wt : wts) {
-        wt.semaphore.signal();
     }
 }
