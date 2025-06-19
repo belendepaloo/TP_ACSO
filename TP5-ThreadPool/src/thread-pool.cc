@@ -99,26 +99,11 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
 
 void ThreadPool::wait() {
     while (true) {
-        bool allWorkersIdle = true;
-        {
-            lock_guard<mutex> lock(queueLock);
-            if (!taskQueue.empty()) {
-                allWorkersIdle = false;
-            }
-        }
-
-        // Verificar que todos los workers estén disponibles
-        for (size_t i = 0; i < wts.size() && allWorkersIdle; ++i) {
-            lock_guard<mutex> wlock(wts[i].mtx);
-            if (!wts[i].available) {
-                allWorkersIdle = false;
-            }
-        }
-
-        if (allWorkersIdle) break;
+        if (tasksDone.load() == tasksTotal.load()) break;
         this_thread::yield();
     }
 }
+
 
 ThreadPool::~ThreadPool() {
     wait();       // Esperar a que se terminen todas las tareas
