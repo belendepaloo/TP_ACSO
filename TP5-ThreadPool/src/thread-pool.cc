@@ -124,15 +124,15 @@ void ThreadPool::dispatcher() {
         {
             lock_guard<mutex> lock(queueLock);
             for (auto& wt : wts) {
-                lock_guard<mutex> wtlock(wt.mtx);
-                if (wt.available) {
-                    wt.thunk = move(tasks.front());
-                    tasks.pop();
-                    wt.available = false;
-                    wt.semaphore.signal();
-                    break;
+                 lock_guard<mutex> wtlock(wt.mtx);
+                 if (wt.available && !tasks.empty()) {
+                     wt.thunk = move(tasks.front());
+                     tasks.pop();
+                     wt.available = false;
+                     wt.semaphore.signal();
                 }
             }
+
         }
     }
 
