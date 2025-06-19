@@ -35,8 +35,8 @@ typedef struct worker {
     thread ts;
     function<void(void)> thunk;
     Semaphore ready{0}; // Semaphore to signal when the worker is ready to execute a task
-    bool available = true; // Indicates if the worker is available for new tasks
     mutex mtx; // Mutex to protect access to the worker's state
+    std::atomic<bool> available{true};
 } worker_t;
 
 class ThreadPool {
@@ -83,6 +83,8 @@ class ThreadPool {
     std::mutex tasksMutex;
     atomic<int> tasksTotal{0};
     atomic<int> tasksDone{0};   
+    
+
 
     /* It is incomplete, there should be more private variables to manage the structures... 
     * *

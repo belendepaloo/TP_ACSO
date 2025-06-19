@@ -23,27 +23,32 @@ ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), done(false) {
 void ThreadPool::worker(int id) {
     while (true) {
         wts[id].ready.wait();
+
         if (done) break;
 
         function<void()> task;
+        bool hasTask = false;
+
+        // Bloque crítico: acceder y limpiar la tarea asignada, marcar disponible
         {
             lock_guard<mutex> lg(wts[id].mtx);
             task = wts[id].thunk;
             wts[id].thunk = nullptr;
+            hasTask = static_cast<bool>(task);
+            wts[id].available.store(true, memory_order_release);  // Usamos atomic<bool>
         }
 
-        if (task) {
+        // Ejecutar tarea fuera del lock
+        if (hasTask) {
             task();
+
+            // Marcar como completada
             std::lock_guard<std::mutex> lock(tasksMutex);
             tasksDone++;
         }
-
-        {
-            lock_guard<mutex> lg(wts[id].mtx);
-            wts[id].available = true;
-        }
     }
 }
+
 
 
 
