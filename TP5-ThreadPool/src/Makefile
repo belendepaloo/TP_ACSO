@@ -15,7 +15,8 @@ $(TARGET): $(SRC)
 
 # Para correr los tests de la cátedra:
 custom:
-	g++ -std=c++11 -Wall -pthread -g -o threadpool thread-pool.cc Semaphore.cc tpcustomtest.cc
+	$(CXX) $(CXXFLAGS) -o $(TARGET) thread-pool.cc Semaphore.cc test_custom.cc
+
 
 test:
 	g++ -std=c++11 -Wall -pthread -g -o threadpool thread-pool.cc Semaphore.cc tptest.cc
