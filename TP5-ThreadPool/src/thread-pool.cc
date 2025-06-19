@@ -2,9 +2,6 @@
 #include <iostream>
 using namespace std;
 
-#define DEBUG true
-#define DOUT if (DEBUG) cout
-
 ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), availableWorkers(numThreads) {
     for (size_t i = 0; i < numThreads; ++i) {
         wts[i].id = i;
@@ -25,7 +22,6 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
     {
         lock_guard<mutex> lock(queueLock);
         if (done) return;
-        DOUT << "[schedule] Adding task. Pending: " << pendingTasks + 1 << endl;
         tasks.push(thunk);
         pendingTasks++;
     }
