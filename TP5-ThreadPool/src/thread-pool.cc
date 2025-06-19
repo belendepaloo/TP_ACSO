@@ -82,9 +82,14 @@ void ThreadPool::worker(int id) {
         {
             lock_guard<mutex> lock(doneMutex);
             pendingTasks--;
-            if (pendingTasks == 0) {
-                waitCV.notify_all();
+            {
+                lock_guard<mutex> lock(doneMutex);
+                pendingTasks--;
+                if (pendingTasks == 0) {
+                    waitCV.notify_all();
+                }
             }
+
         }
 
         {
