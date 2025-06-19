@@ -114,27 +114,37 @@ void ThreadPool::worker(int id) {
 
 void ThreadPool::dispatcher() {
     while (true) {
+        function<void(void)> nextTask;
+
         {
             unique_lock<mutex> lock(queueLock);
+            queueCV.wait(lock, [this]() {
+                return !tasks.empty() || done;
+            });
             if (done && tasks.empty()) break;
-            queueCV.wait(lock, [this] { return !tasks.empty() || done; });
-            if (done && tasks.empty()) break;
-            if (tasks.empty()) continue;
+
+            nextTask = move(tasks.front());
+            tasks.pop();
         }
 
         availableWorkers.wait();
 
-        {
-            lock_guard<mutex> lock(queueLock);
-            for (auto& wt : wts) {
-                lock_guard<mutex> wtlock(wt.mtx);
-                if (wt.available && !tasks.empty()) {
-                    wt.thunk = move(tasks.front());
-                    tasks.pop();
-                    wt.available = false;
-                    wt.semaphore.signal();
-                }
+        bool assigned = false;
+        for (auto& wt : wts) {
+            lock_guard<mutex> lg(wt.mtx);
+            if (wt.available) {
+                wt.available = false;
+                wt.thunk = nextTask;
+                wt.semaphore.signal();
+                assigned = true;
+                break;
             }
+        }
+
+        if (!assigned) {
+            lock_guard<mutex> lock(queueLock);
+            tasks.push(nextTask);
+            availableWorkers.signal();
         }
     }
 
