@@ -38,6 +38,7 @@ void ThreadPool::wait() {
 
 ThreadPool::~ThreadPool() {
     destructionStarted = true;
+    wait();
     
     {
         lock_guard<mutex> lock(queueLock);
