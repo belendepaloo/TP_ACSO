@@ -38,15 +38,13 @@ void ThreadPool::wait() {
 ThreadPool::~ThreadPool() {
     destructionStarted = true;
 
-    while (true) {
     {
-        lock_guard<mutex> qlock(queueLock);
-        lock_guard<mutex> wlock(waitLock);
-        if (pendingTasks == 0 && tasks.empty()) break;
+        unique_lock<mutex> lock(waitLock);
+        waitCV.wait(lock, [this] {
+            lock_guard<mutex> qlock(queueLock);
+            return pendingTasks == 0 && tasks.empty();
+        });
     }
-    this_thread::yield(); // o sleep(1ms)
-}
-
 
     {
         lock_guard<mutex> lock(queueLock);
@@ -82,26 +80,24 @@ ThreadPool::~ThreadPool() {
 
 void ThreadPool::worker(int id) {
     while (true) {
-        // Espera hasta que el dispatcher le asigne trabajo
         wts[id].semaphore.wait();
 
-        if (done) break;
-
-        // Toma la tarea de manera segura
-        function<void()> task;
-        {
-            lock_guard<mutex> taskLock(taskMapMutex);
-            task = move(taskMap[id]);
-            taskMap.erase(id);
+        if (done) {
+            break;
         }
 
-        // Ejecuta la tarea
-        if (task) task();
+        // Execute task if available
+        if (wts[id].thunk) {
+            wts[id].thunk();
+            wts[id].thunk = nullptr;
+        }
 
         {
             lock_guard<mutex> lock(queueLock);
             wts[id].available = true;
-            pendingTasks--;
+            if (wts[id].thunk == nullptr) {
+                pendingTasks--;
+            }
 
             if (pendingTasks == 0) {
                 lock_guard<mutex> waitLockGuard(waitLock);
@@ -112,7 +108,6 @@ void ThreadPool::worker(int id) {
         }
     }
 }
-
 
 void ThreadPool::dispatcher() {
     while (true) {
@@ -141,20 +136,13 @@ void ThreadPool::dispatcher() {
             lock_guard<mutex> lock(queueLock);
             for (auto& wt : wts) {
                 if (wt.available) {
-                    auto thunk = move(tasks.front());
+                    wt.thunk = move(tasks.front());
                     tasks.pop();
                     wt.available = false;
-
-                    {
-                        lock_guard<mutex> taskLock(taskMapMutex);
-                        taskMap[wt.id] = move(thunk);
-                    }
-
                     wt.semaphore.signal();
                     break;
                 }
             }
-
         }
     }
     
