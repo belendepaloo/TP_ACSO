@@ -14,11 +14,12 @@
 using namespace std;
 
 typedef struct worker {
-    thread ts;
-    function<void(void)> thunk;
-    bool available;
-    Semaphore semaphore{0};
-    int id;
+    thread ts;                       // Hilo del worker
+    function<void(void)> thunk;     // Tarea asignada al worker
+    bool available;                 // Indica si el worker está libre
+    Semaphore semaphore{0};         // Para esperar señales del dispatcher
+    int id;                         // ID del worker
+    mutex mtx;                      // Protege 'thunk' y 'available'
 } worker_t;
 
 class ThreadPool {
@@ -27,22 +28,30 @@ public:
     void schedule(const function<void(void)>& thunk);
     void wait();
     ~ThreadPool();
-    
-private:
-    void worker(int id);
-    void dispatcher();
 
-    thread dt;
-    vector<worker_t> wts;
-    queue<function<void(void)>> tasks;
-    atomic<bool> done{false};
-    mutex queueLock;
-    condition_variable_any queueCV;
-    Semaphore availableWorkers;
-    atomic<int> pendingTasks{0};
-    condition_variable_any waitCV;
-    mutex waitLock;
-    atomic<bool> destructionStarted{false};
+private:
+    void worker(int id);            // Función ejecutada por cada worker
+    void dispatcher();              // Función ejecutada por el dispatcher
+
+    thread dt;                      // Hilo dispatcher
+    vector<worker_t> wts;           // Vector de workers
+    queue<function<void(void)>> tasks; // Cola de tareas
+    atomic<bool> done{false};      // Indica que el pool se está cerrando
+
+    mutex queueLock;               // Protege el acceso a la cola de tareas
+    condition_variable_any queueCV;// Notifica al dispatcher sobre nuevas tareas
+
+    Semaphore availableWorkers;    // Controla cuántos workers están libres
+    atomic<int> pendingTasks{0};   // Cantidad de tareas pendientes
+
+    condition_variable_any waitCV; // Para que wait() sepa cuándo terminar
+    mutex waitLock;                // Protege la condición de espera
+
+    atomic<bool> destructionStarted{false}; // Indica si se inició la destrucción
+
+    // Evita la copia y asignación
+    ThreadPool(const ThreadPool& original) = delete;
+    ThreadPool& operator=(const ThreadPool& rhs) = delete;
 };
 
 #endif

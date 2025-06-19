@@ -1,3 +1,4 @@
+// thread-pool.cc
 #include "thread-pool.h"
 #include <iostream>
 using namespace std;
@@ -38,12 +39,11 @@ void ThreadPool::wait() {
 ThreadPool::~ThreadPool() {
     destructionStarted = true;
     {
-    unique_lock<mutex> lock(queueLock);
-    waitCV.wait(lock, [this] {
-        return pendingTasks == 0 && tasks.empty();
-    });
+        unique_lock<mutex> lock(queueLock);
+        waitCV.wait(lock, [this] {
+            return pendingTasks == 0 && tasks.empty();
+        });
     }
-
 
     {
         lock_guard<mutex> lock(queueLock);
@@ -76,7 +76,6 @@ ThreadPool::~ThreadPool() {
     }
 }
 
-
 void ThreadPool::worker(int id) {
     while (true) {
         wts[id].semaphore.wait();
@@ -85,24 +84,26 @@ void ThreadPool::worker(int id) {
             break;
         }
 
-        // Execute task if available
-        if (wts[id].thunk) {
-            wts[id].thunk();
-            wts[id].thunk = nullptr;
+        // Ejecutar la tarea asignada
+        {
+            lock_guard<mutex> lock(wts[id].mtx);
+            if (wts[id].thunk) {
+                wts[id].thunk();
+                wts[id].thunk = nullptr;
+            }
         }
 
         {
             lock_guard<mutex> lock(queueLock);
-            wts[id].available = true;
-            if (wts[id].thunk == nullptr) {
-                pendingTasks--;
+            {
+                lock_guard<mutex> wtlock(wts[id].mtx);
+                wts[id].available = true;
             }
-
+            pendingTasks--;
             if (pendingTasks == 0) {
                 lock_guard<mutex> waitLockGuard(waitLock);
                 waitCV.notify_all();
             }
-
             availableWorkers.signal();
         }
     }
@@ -112,21 +113,10 @@ void ThreadPool::dispatcher() {
     while (true) {
         {
             unique_lock<mutex> lock(queueLock);
-            if (done && tasks.empty()) {
-                break;
-            }
-            
-            queueCV.wait(lock, [this] { 
-                return !tasks.empty() || done; 
-            });
-            
-            if (done && tasks.empty()) {
-                break;
-            }
-
-            if (tasks.empty()) {
-                continue;
-            }
+            if (done && tasks.empty()) break;
+            queueCV.wait(lock, [this] { return !tasks.empty() || done; });
+            if (done && tasks.empty()) break;
+            if (tasks.empty()) continue;
         }
 
         availableWorkers.wait();
@@ -134,6 +124,7 @@ void ThreadPool::dispatcher() {
         {
             lock_guard<mutex> lock(queueLock);
             for (auto& wt : wts) {
+                lock_guard<mutex> wtlock(wt.mtx);
                 if (wt.available) {
                     wt.thunk = move(tasks.front());
                     tasks.pop();
@@ -144,8 +135,7 @@ void ThreadPool::dispatcher() {
             }
         }
     }
-    
-    // Ensure all workers wake up to check done flag
+
     for (auto& wt : wts) {
         wt.semaphore.signal();
     }
