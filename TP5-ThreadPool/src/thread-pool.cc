@@ -112,7 +112,10 @@ void ThreadPool::worker(int id) {
                 }
             }
             availableWorkers.signal();
-            cerr << "[worker " << id << "] terminó tarea, queda " << pendingTasks.load() << " pendientes." << endl;
+{
+    lock_guard<mutex> lock(waitLock);
+    cerr << "[worker " << id << "] terminó tarea, queda " << pendingTasks << " pendientes." << endl;
+}
         }
     }
 }
