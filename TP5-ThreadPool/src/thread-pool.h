@@ -14,90 +14,65 @@
 #include <functional>  // for the function template used in the schedule signature
 #include <thread>      // for thread
 #include <vector>      // for vector
+#include <queue>       // for queue
+#include <condition_variable> // for condition_variable
 #include "Semaphore.h" // for Semaphore
-#include <queue>
-#include <atomic>
-
 
 using namespace std;
 
-
 /**
  * @brief Represents a worker in the thread pool.
- * 
- * The `worker_t` struct contains information about a worker 
- * thread in the thread pool. Should be includes the thread object, 
- * availability status, the task to be executed, and a semaphore 
- * (or condition variable) to signal when work is ready for the 
- * worker to process.
  */
 typedef struct worker {
-    thread ts;
-    function<void(void)> thunk;
-    Semaphore ready{0}; // Semaphore to signal when the worker is ready to execute a task
-    mutex mtx; // Mutex to protect access to the worker's state
-    std::atomic<bool> available{true};
+    thread ts;                     // Thread handle
+    function<void(void)> thunk;    // Task to execute
+    bool available;                // Availability status
+    Semaphore semaphore{0};        // Semaphore to signal work availability
+    int id;                        // Worker ID
 } worker_t;
 
 class ThreadPool {
-  public:
-
-  /**
-  * Constructs a ThreadPool configured to spawn up to the specified
-  * number of threads.
-  */
+public:
+    /**
+     * Constructs a ThreadPool configured to spawn up to the specified
+     * number of threads.
+     */
     ThreadPool(size_t numThreads);
 
-  /**
-  * Schedules the provided thunk (which is something that can
-  * be invoked as a zero-argument function without a return value)
-  * to be executed by one of the ThreadPool's threads as soon as
-  * all previously scheduled thunks have been handled.
-  */
+    /**
+     * Schedules the provided thunk (which is something that can
+     * be invoked as a zero-argument function without a return value)
+     * to be executed by one of the ThreadPool's threads as soon as
+     * all previously scheduled thunks have been handled.
+     */
     void schedule(const function<void(void)>& thunk);
 
-  /**
-  * Blocks and waits until all previously scheduled thunks
-  * have been executed in full.
-  */
+    /**
+     * Blocks and waits until all previously scheduled thunks
+     * have been executed in full.
+     */
     void wait();
 
-  /**
-  * Waits for all previously scheduled thunks to execute, and then
-  * properly brings down the ThreadPool and any resources tapped
-  * over the course of its lifetime.
-  */
+    /**
+     * Waits for all previously scheduled thunks to execute, and then
+     * properly brings down the ThreadPool and any resources tapped
+     * over the course of its lifetime.
+     */
     ~ThreadPool();
     
-  private:
-
+private:
     void worker(int id);
     void dispatcher();
+
     thread dt;                              // dispatcher thread handle
-    vector<worker_t> wts; 
-    std::atomic<bool> done{false};                  // worker thread handles. you may want to change/remove this                             // flag to indicate the pool is being destroyed
+    vector<worker_t> wts;                   // worker thread handles
+    queue<function<void(void)>> tasks;      // queue of tasks to execute
+    bool done;                              // flag to indicate the pool is being destroyed
     mutex queueLock;                        // mutex to protect the queue of tasks
-    queue<function<void(void)>> taskQueue;
-    Semaphore tasksPending{0};  
-    bool active = true;
-    std::mutex tasksMutex;
-    atomic<int> tasksTotal{0};
-    atomic<int> tasksDone{0};   
-    
-
-
-    /* It is incomplete, there should be more private variables to manage the structures... 
-    * *
-    */
-  
-    /* ThreadPools are the type of thing that shouldn't be cloneable, since it's
-    * not clear what it means to clone a ThreadPool (should copies of all outstanding
-    * functions to be executed be copied?).
-    *
-    * In order to prevent cloning, we remove the copy constructor and the
-    * assignment operator.  By doing so, the compiler will ensure we never clone
-    * a ThreadPool. */
-    ThreadPool(const ThreadPool& original) = delete;
-    ThreadPool& operator=(const ThreadPool& rhs) = delete;
+    condition_variable_any queueCV;         // condition variable for task queue
+    Semaphore availableWorkers;             // semaphore for available workers
+    atomic<int> pendingTasks{0};            // counter for pending tasks
+    condition_variable_any waitCV;          // condition variable for wait()
 };
+
 #endif

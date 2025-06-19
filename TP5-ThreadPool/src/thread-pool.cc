@@ -1,152 +1,113 @@
 /**
  * File: thread-pool.cc
- * --------------------
+ * -------------------
  * Presents the implementation of the ThreadPool class.
  */
 
 #include "thread-pool.h"
 using namespace std;
-#include <iostream>
 
-ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), done(false) {
+ThreadPool::ThreadPool(size_t numThreads) : wts(numThreads), done(false), availableWorkers(numThreads) {
+    // Initialize workers
     for (size_t i = 0; i < numThreads; ++i) {
-        wts[i].ts = thread([this, i]() {
-            worker(i);
-        });
+        wts[i].id = i;
+        wts[i].available = true;
+        wts[i].ts = thread([this, i] { worker(i); });
+    }
+    
+    // Start dispatcher thread
+    dt = thread([this] { dispatcher(); });
+}
+
+void ThreadPool::schedule(const function<void(void)>& thunk) {
+    lock_guard<mutex> lock(queueLock);
+    tasks.push(thunk);
+    pendingTasks++;
+    queueCV.notify_one();
+}
+
+void ThreadPool::wait() {
+    unique_lock<mutex> lock(queueLock);
+    waitCV.wait(lock, [this] { return pendingTasks == 0; });
+}
+
+ThreadPool::~ThreadPool() {
+    {
+        lock_guard<mutex> lock(queueLock);
+        done = true;
+        queueCV.notify_all();
     }
 
-    dt = thread([this]() {
-        dispatcher();
-    });
+    // Notify all workers to exit
+    for (auto& wt : wts) {
+        wt.semaphore.signal();
+    }
+
+    // Join all worker threads
+    for (auto& wt : wts) {
+        if (wt.ts.joinable()) {
+            wt.ts.join();
+        }
+    }
+
+    // Join dispatcher thread
+    if (dt.joinable()) {
+        dt.join();
+    }
 }
 
 void ThreadPool::worker(int id) {
     while (true) {
-        wts[id].ready.wait();
-
+        wts[id].semaphore.wait(); // Wait for work
+        
+        // Check if we should exit
         if (done) break;
-
-        function<void()> task;
-        bool hasTask = false;
-
-        // Bloque crítico: acceder y limpiar la tarea asignada, marcar disponible
+        
+        // Execute the task
+        wts[id].thunk();
+        
         {
-            lock_guard<mutex> lg(wts[id].mtx);
-            task = wts[id].thunk;
-            wts[id].thunk = nullptr;
-            hasTask = static_cast<bool>(task);
-            wts[id].available.store(true, memory_order_release);  // Usamos atomic<bool>
-        }
-
-        // Ejecutar tarea fuera del lock
-        if (hasTask) {
-            task();
-
-            // Marcar como completada
-            std::lock_guard<std::mutex> lock(tasksMutex);
-            tasksDone++;
+            lock_guard<mutex> lock(queueLock);
+            wts[id].available = true;
+            pendingTasks--;
+            
+            // Notify wait() if all tasks are done
+            if (pendingTasks == 0) {
+                waitCV.notify_all();
+            }
+            
+            // Notify dispatcher that a worker is available
+            availableWorkers.signal();
         }
     }
 }
-
-
-
 
 void ThreadPool::dispatcher() {
     while (true) {
-        tasksPending.wait(); // Espera hasta que haya al menos una tarea
-
-        if (done) break; // si el ThreadPool está cerrándose, salir
-
         function<void(void)> task;
-
-        // Extraer la tarea de la cola
+        
         {
-            lock_guard<mutex> lock(queueLock);
-            if (!taskQueue.empty()) {
-                task = taskQueue.front();
-                taskQueue.pop();
-            } else {
-                continue;
-            }
-        }
-
-        bool assigned = false;
-        while (!assigned && !done) {
-            for (size_t i = 0; i < wts.size(); ++i) {
-            unique_lock<mutex> wlock(wts[i].mtx);
-            if (wts[i].available) {
-                wts[i].available = false;       // Reservar primero
-                wts[i].thunk = task;            // Asignar tarea
-                wts[i].ready.signal();          // Despertar worker
-                assigned = true;
-                break;
-            }
-        }
-
-            if (!assigned) {
-                this_thread::yield();
+            unique_lock<mutex> lock(queueLock);
+            queueCV.wait(lock, [this] { return !tasks.empty() || done; });
+            
+            // Check if we should exit
+            if (done && tasks.empty()) break;
+            if (tasks.empty()) continue;
+            
+            // Wait for an available worker
+            availableWorkers.wait();
+            
+            // Find an available worker
+            for (auto& wt : wts) {
+                if (wt.available) {
+                    task = tasks.front();
+                    tasks.pop();
+                    wt.thunk = task;
+                    wt.available = false;
+                    wt.semaphore.signal();
+                    break;
+                }
             }
         }
     }
 }
-
-void ThreadPool::schedule(const function<void(void)>& thunk) {
-        if (!thunk) {
-        throw invalid_argument("No se puede encolar una función nula.");
-        }
-        if (!active) {
-        throw logic_error("No se puede llamar a schedule() sobre un ThreadPool destruido.");
-    }
-    {
-        std::lock_guard<std::mutex> lock(queueLock);
-        taskQueue.push(thunk);
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(tasksMutex);
-        tasksTotal++;
-    }
-
-    tasksPending.signal();
-}
-
-
-void ThreadPool::wait() {
-    while (true) {
-        std::lock_guard<std::mutex> lock(tasksMutex);
-        if (tasksDone.load() == tasksTotal.load()) break;
-        this_thread::yield();
-    }
-}
-
-
-ThreadPool::~ThreadPool() {
-    wait();       // Esperar a que se terminen todas las tareas
-
-    done = true;  // Señalar que el pool se está cerrando
-
-    // Despertar al dispatcher (por si está bloqueado en tasksPending.wait)
-    tasksPending.signal();
-
-    // Despertar a todos los workers (por si están esperando con ready.wait)
-    for (auto& w : wts) {
-        w.ready.signal();  // Lo va a hacer salir del loop
-    }
-
-    // Esperar a que todos los workers terminen
-    for (auto& w : wts) {
-        if (w.ts.joinable()) {
-            w.ts.join();
-        }
-    }
-
-    // Esperar al dispatcher
-    if (dt.joinable()) {
-        dt.join();
-    }
-    active = false;
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-
-}
-
