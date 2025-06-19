@@ -14,12 +14,12 @@
 using namespace std;
 
 typedef struct worker {
-    thread ts;                       // hilo del worker
-    function<void(void)> thunk;     // tarea asignada
-    bool available = true;          // estado del worker
-    Semaphore semaphore{0};         // semáforo del worker
-    mutex mtx;                      // protege 'thunk' y 'available'
-    int id = -1;                    // id del worker
+    thread ts;                       // Hilo del worker
+    function<void(void)> thunk;     // Tarea asignada al worker
+    bool available;                 // Indica si el worker está libre
+    Semaphore semaphore{0};         // Para esperar señales del dispatcher
+    int id;                         // ID del worker
+    mutex mtx;                      // Protege 'thunk' y 'available'
 } worker_t;
 
 class ThreadPool {
@@ -30,26 +30,23 @@ public:
     ~ThreadPool();
 
 private:
-    void worker(int id);
-    void dispatcher();
+    void worker(int id);            // Función ejecutada por cada worker
+    void dispatcher();              // Función ejecutada por el dispatcher
 
-    vector<worker_t> wts;                  // workers
-    thread dt;                             // dispatcher
-    queue<function<void(void)>> tasks;     // cola de tareas
+    thread dt;                      // Hilo dispatcher
+    vector<worker_t> wts;           // Vector de workers
+    queue<function<void(void)>> tasks; // Cola de tareas
+    mutex queueLock;               // Protege el acceso a la cola de tareas
+    condition_variable_any queueCV;// Notifica al dispatcher sobre nuevas tareas
+    Semaphore availableWorkers;    // Controla cuántos workers están libres
+    condition_variable_any waitCV; // Para que wait() sepa cuándo terminar
+    mutex waitLock;   
+    bool done = false;
+    int pendingTasks = 0;
 
-    mutex queueLock;                       // protege la cola de tareas
-    condition_variable queueCV;           // para que el dispatcher espere por tareas
-
-    Semaphore availableWorkers;           // semáforo de disponibilidad de workers
-
-    mutex doneMutex;                      // protege 'done' y 'pendingTasks'
-    condition_variable waitCV;            // para wait()
-    bool done;                            // indica si el threadpool se está destruyendo
-    int pendingTasks = 0;                 // tareas activas
-
-    // evitar copia y asignación
-    ThreadPool(const ThreadPool&) = delete;
-    ThreadPool& operator=(const ThreadPool&) = delete;
+    // Evita la copia y asignación
+    ThreadPool(const ThreadPool& original) = delete;
+    ThreadPool& operator=(const ThreadPool& rhs) = delete;
 };
 
 #endif
