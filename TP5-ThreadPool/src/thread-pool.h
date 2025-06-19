@@ -15,7 +15,6 @@ using namespace std;
 
 typedef struct worker {
     thread ts;
-    function<void(void)> thunk;
     bool available;
     Semaphore semaphore{0};
     int id;
@@ -43,6 +42,9 @@ private:
     condition_variable_any waitCV;
     mutex waitLock;
     atomic<bool> destructionStarted{false};
+    unordered_map<int, function<void(void)>> taskMap;
+    mutex taskMapMutex;
+
 };
 
 #endif

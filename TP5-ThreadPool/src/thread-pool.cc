@@ -80,24 +80,26 @@ ThreadPool::~ThreadPool() {
 
 void ThreadPool::worker(int id) {
     while (true) {
+        // Espera hasta que el dispatcher le asigne trabajo
         wts[id].semaphore.wait();
 
-        if (done) {
-            break;
+        if (done) break;
+
+        // Toma la tarea de manera segura
+        function<void()> task;
+        {
+            lock_guard<mutex> taskLock(taskMapMutex);
+            task = move(taskMap[id]);
+            taskMap.erase(id);
         }
 
-        // Execute task if available
-        if (wts[id].thunk) {
-            wts[id].thunk();
-            wts[id].thunk = nullptr;
-        }
+        // Ejecuta la tarea
+        if (task) task();
 
         {
             lock_guard<mutex> lock(queueLock);
             wts[id].available = true;
-            if (wts[id].thunk == nullptr) {
-                pendingTasks--;
-            }
+            pendingTasks--;
 
             if (pendingTasks == 0) {
                 lock_guard<mutex> waitLockGuard(waitLock);
@@ -108,6 +110,7 @@ void ThreadPool::worker(int id) {
         }
     }
 }
+
 
 void ThreadPool::dispatcher() {
     while (true) {
@@ -136,13 +139,20 @@ void ThreadPool::dispatcher() {
             lock_guard<mutex> lock(queueLock);
             for (auto& wt : wts) {
                 if (wt.available) {
-                    wt.thunk = move(tasks.front());
+                    auto thunk = move(tasks.front());
                     tasks.pop();
                     wt.available = false;
+
+                    {
+                        lock_guard<mutex> taskLock(taskMapMutex);
+                        taskMap[wt.id] = move(thunk);
+                    }
+
                     wt.semaphore.signal();
                     break;
                 }
             }
+
         }
     }
     
