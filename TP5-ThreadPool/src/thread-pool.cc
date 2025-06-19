@@ -3,10 +3,10 @@
 using namespace std;
 
 ThreadPool::ThreadPool(size_t numThreads) : 
-    wts(numThreads), 
-    availableWorkers(numThreads),
     done(false),
-    destructionStarted(false) {
+    destructionStarted(false),
+    availableWorkers(numThreads),
+    wts(numThreads) {
     
     for (size_t i = 0; i < numThreads; ++i) {
         wts[i].id = i;

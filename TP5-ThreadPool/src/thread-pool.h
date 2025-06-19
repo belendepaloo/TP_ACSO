@@ -32,17 +32,18 @@ private:
     void worker(int id);
     void dispatcher();
 
-    thread dt;
-    vector<worker_t> wts;
-    queue<function<void(void)>> tasks;
+    // Miembros en orden de declaración
     atomic<bool> done{false};
+    atomic<bool> destructionStarted{false};
     mutex queueLock;
     condition_variable_any queueCV;
     Semaphore availableWorkers;
     atomic<int> pendingTasks{0};
     condition_variable_any waitCV;
     mutex waitLock;
-    atomic<bool> destructionStarted{false};
+    thread dt;
+    vector<worker_t> wts;
+    queue<function<void(void)>> tasks;
 };
 
 #endif
