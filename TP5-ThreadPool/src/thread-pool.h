@@ -8,7 +8,6 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
-#include <atomic>
 
 using namespace std;
 
@@ -23,11 +22,12 @@ struct worker_t {
 
 class ThreadPool {
 public:
-    explicit ThreadPool(size_t numThreads);
+    ThreadPool(size_t numThreads);
     void schedule(const function<void(void)>& thunk);
     void wait();
     ~ThreadPool();
 
+    // Evita copia y asignación
     ThreadPool(const ThreadPool& other) = delete;
     ThreadPool& operator=(const ThreadPool& other) = delete;
 
@@ -35,22 +35,22 @@ private:
     void worker(int id);
     void dispatcher();
 
-    // Miembros ordenados para evitar warnings
-    atomic<bool> done{false};
-    atomic<int> pendingTasks{0};
-    thread dt;
-    vector<worker_t> wts;
-    
-    queue<function<void()>> tasks;
-    mutex taskMutex;
-    condition_variable taskAvailable;
+    bool done;
+    int pendingTasks;
 
-    queue<int> idleWorkers;
-    mutex wtQueueMutex;
-    condition_variable workerReady;
+    thread dt;                          // Dispatcher thread
+    vector<worker_t> wts;               // Worker pool
 
-    mutex waitMutex;
-    condition_variable waitCond;
+    queue<function<void()>> tasks;      // Task queue
+    mutex taskMutex;                    // Protects task queue
+    condition_variable taskAvailable;   // Signals when tasks are available
+
+    queue<int> idleWorkers;             // IDs of available workers
+    mutex wtQueueMutex;                 // Protects idleWorkers queue
+    condition_variable workerReady;     // Signals when workers are available
+
+    mutex waitMutex;                    // Protects pendingTasks + done
+    condition_variable waitCond;        // Notifies wait() when all tasks are done
 };
 
 #endif

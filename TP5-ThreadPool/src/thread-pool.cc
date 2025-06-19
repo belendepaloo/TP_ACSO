@@ -1,34 +1,25 @@
+// thread-pool.cc
 #include "thread-pool.h"
 #include <iostream>
-#include <stdexcept>
-
 using namespace std;
 
-ThreadPool::ThreadPool(size_t numThreads) : 
-    done(false),
-    pendingTasks(0),
-    wts(numThreads) {
-    
-    // Inicializar workers
+ThreadPool::ThreadPool(size_t numThreads)
+    : wts(numThreads), done(false), pendingTasks(0) {
     for (size_t i = 0; i < numThreads; ++i) {
         wts[i].id = i;
-        wts[i].ts = thread([this, i] { worker(i); });
+        wts[i].ready = false;
+        wts[i].ts = thread([this, i]() { worker(i); });
     }
 
-    // Iniciar dispatcher
-    dt = thread([this] { dispatcher(); });
+    dt = thread([this]() { dispatcher(); });
 }
 
 void ThreadPool::schedule(const function<void(void)>& thunk) {
-    if (!thunk) {
-        throw invalid_argument("Cannot schedule nullptr function");
-    }
+    if (!thunk) throw invalid_argument("Null task");
 
     {
         lock_guard<mutex> lock(waitMutex);
-        if (done) {
-            throw runtime_error("Scheduling on destroyed ThreadPool");
-        }
+        if (done) throw runtime_error("Scheduling on a destroyed ThreadPool");
         pendingTasks++;
     }
 
@@ -42,23 +33,19 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
 
 void ThreadPool::wait() {
     unique_lock<mutex> lock(waitMutex);
-    waitCond.wait(lock, [this] { 
-        return pendingTasks == 0 || done.load(); 
-    });
+    waitCond.wait(lock, [this]() { return pendingTasks == 0; });
 }
 
 ThreadPool::~ThreadPool() {
-    // Marcar para terminación
+    wait();
+
     {
         lock_guard<mutex> lock(waitMutex);
         done = true;
     }
 
-    // Notificar a todos los threads
     taskAvailable.notify_all();
-    workerReady.notify_all();
 
-    // Notificar a los workers
     for (auto& w : wts) {
         {
             lock_guard<mutex> lock(w.mtx);
@@ -67,92 +54,75 @@ ThreadPool::~ThreadPool() {
         w.cv.notify_one();
     }
 
-    // Esperar a que terminen los threads
-    if (dt.joinable()) {
-        dt.join();
-    }
+    if (dt.joinable()) dt.join();
 
     for (auto& w : wts) {
-        if (w.ts.joinable()) {
-            w.ts.join();
-        }
+        if (w.ts.joinable()) w.ts.join();
     }
 }
 
 void ThreadPool::worker(int id) {
     worker_t& w = wts[id];
-    
     while (true) {
-        // Reportarse como disponible
+        unique_lock<mutex> lock(w.mtx);
+        w.cv.wait(lock, [&]() { return w.ready || done; });
+
+        if (done) break;
+
+        function<void()> job;
+        {
+            lock_guard<mutex> tlock(w.mtx);
+            job = w.task;
+            w.task = nullptr;
+            w.ready = false;
+        }
+
+        if (job) job();
+
+        {
+            lock_guard<mutex> lock(waitMutex);
+            pendingTasks--;
+            if (pendingTasks == 0) waitCond.notify_all();
+        }
+
         {
             lock_guard<mutex> lock(wtQueueMutex);
             idleWorkers.push(id);
         }
+
         workerReady.notify_one();
-
-        // Esperar trabajo
-        unique_lock<mutex> lock(w.mtx);
-        w.cv.wait(lock, [&w, this] { 
-            return w.ready || done.load(); 
-        });
-
-        if (done) break;
-
-        // Ejecutar tarea
-        if (w.task) {
-            w.task();
-            w.task = nullptr;
-        }
-
-        // Actualizar contador
-        {
-            lock_guard<mutex> lock(waitMutex);
-            pendingTasks--;
-            if (pendingTasks == 0) {
-                waitCond.notify_all();
-            }
-        }
     }
 }
 
 void ThreadPool::dispatcher() {
     while (true) {
-        // Esperar tarea disponible
-        function<void()> task;
+        function<void()> job;
         {
             unique_lock<mutex> lock(taskMutex);
-            taskAvailable.wait(lock, [this] { 
-                return !tasks.empty() || done.load(); 
-            });
-
+            taskAvailable.wait(lock, [this]() { return !tasks.empty() || done; });
             if (done && tasks.empty()) break;
-            if (tasks.empty()) continue;
-
-            task = move(tasks.front());
+            job = tasks.front();
             tasks.pop();
         }
 
-        // Esperar worker disponible
-        int workerId;
+        int id;
         {
             unique_lock<mutex> lock(wtQueueMutex);
-            workerReady.wait(lock, [this] { 
-                return !idleWorkers.empty() || done.load(); 
-            });
-
-            if (done) break;
-
-            workerId = idleWorkers.front();
+            workerReady.wait(lock, [this]() { return !idleWorkers.empty(); });
+            id = idleWorkers.front();
             idleWorkers.pop();
         }
 
-        // Asignar tarea
-        worker_t& w = wts[workerId];
+        worker_t& w = wts[id];
         {
             lock_guard<mutex> lock(w.mtx);
-            w.task = move(task);
+            w.task = job;
             w.ready = true;
         }
+        w.cv.notify_one();
+    }
+
+    for (auto& w : wts) {
         w.cv.notify_one();
     }
 }
