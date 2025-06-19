@@ -38,13 +38,15 @@ void ThreadPool::wait() {
 ThreadPool::~ThreadPool() {
     destructionStarted = true;
 
+    while (true) {
     {
-        unique_lock<mutex> lock(waitLock);
-        waitCV.wait(lock, [this] {
-            lock_guard<mutex> qlock(queueLock);
-            return pendingTasks == 0 && tasks.empty();
-        });
+        lock_guard<mutex> qlock(queueLock);
+        lock_guard<mutex> wlock(waitLock);
+        if (pendingTasks == 0 && tasks.empty()) break;
     }
+    this_thread::yield(); // o sleep(1ms)
+}
+
 
     {
         lock_guard<mutex> lock(queueLock);
