@@ -11,6 +11,10 @@ ThreadPool::ThreadPool(size_t numThreads)
 }
 
 void ThreadPool::schedule(const function<void(void)>& thunk) {
+    if (done.load()) {
+        throw runtime_error("Cannot schedule after ThreadPool destruction");
+    }
+
     {
         lock_guard<mutex> lg(queueLock);
         tasks.push(thunk);
@@ -18,6 +22,7 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
     }
     taskAvailable.notify_all(); // Notificar al dispatcher
 }
+
 
 void ThreadPool::dispatcher() {
     while (true) {
