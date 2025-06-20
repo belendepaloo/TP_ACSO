@@ -1,8 +1,7 @@
 #include "thread-pool.h"
 #include <stdexcept> 
 
-ThreadPool::ThreadPool(size_t numThreads)
-    : wts(numThreads), done(false), availableWorkers(numThreads) {
+ThreadPool::ThreadPool(size_t numThreads): wts(numThreads), done(false) {
 
     for (size_t i = 0; i < numThreads; ++i) {
         wts[i].ts = thread([this, i] { worker(i); });
@@ -33,6 +32,7 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
 void ThreadPool::dispatcher() {
     while (true) {
         function<void(void)> job;
+
         {
             unique_lock<mutex> lk(queueLock);
             taskAvailable.wait(lk, [this] { return done || !tasks.empty(); });
@@ -43,7 +43,13 @@ void ThreadPool::dispatcher() {
             tasks.pop();
         }
 
-        availableWorkers.wait(); // esperar a que haya un worker libre
+        // Esperar a que haya un worker disponible
+        unique_lock<mutex> wlk(workersLock);
+        workerAvailable.wait(wlk, [this] {
+            for (auto& w : wts)
+                if (w.available.load()) return true;
+            return false;
+        });
 
         for (size_t i = 0; i < wts.size(); ++i) {
             if (wts[i].available.exchange(false)) {
@@ -55,22 +61,31 @@ void ThreadPool::dispatcher() {
     }
 }
 
+
 void ThreadPool::worker(int id) {
     while (true) {
-        wts[id].ready.wait();
+        wts[id].ready.wait();  // Espera señal del dispatcher
 
         if (done && wts[id].task == nullptr) break;
 
         if (wts[id].task) {
-            wts[id].task();
+            wts[id].task();  // Ejecuta la tarea
             wts[id].task = nullptr;
-            pendingTasks--;
+
+            {
+                lock_guard<mutex> lock(queueLock);
+                pendingTasks--;
+                if (pendingTasks == 0) {
+                    allDone.notify_all();  // Despierta a wait()
+                }
+            }
         }
 
-        wts[id].available.store(true);
-        availableWorkers.signal();
+        wts[id].available.store(true);  // Marca disponible
+        workerAvailable.notify_all();   // Notifica al dispatcher
     }
 }
+
 
 void ThreadPool::wait() {
     while (pendingTasks > 0) {

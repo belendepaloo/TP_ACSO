@@ -9,6 +9,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <stdexcept>
 #include "Semaphore.h"
 
 using namespace std;
@@ -35,12 +36,15 @@ class ThreadPool {
     vector<worker_t> wts;                   // workers
     queue<function<void(void)>> tasks;      // cola de tareas
 
-    mutex queueLock;
-    condition_variable_any taskAvailable;   // notificación al dispatcher
+    atomic<bool> done;                      // flag de destrucción
+    int pendingTasks = 0;                   // tareas pendientes
 
-    atomic<bool> done;                      // shutdown flag
-    Semaphore availableWorkers;             // cuenta de workers disponibles
-    atomic<int> pendingTasks{0};            // tareas en ejecución
+    mutex queueLock;                        // protege cola y contador
+    condition_variable_any taskAvailable;   // para dispatcher
+    condition_variable_any allDone;         // para wait()
+
+    mutex workersLock;                      // protege acceso a workers
+    condition_variable_any workerAvailable; // notifica disponibilidad
 };
 
 #endif
