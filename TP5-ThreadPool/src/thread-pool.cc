@@ -1,4 +1,5 @@
 #include "thread-pool.h"
+#include <stdexcept> 
 
 ThreadPool::ThreadPool(size_t numThreads)
     : wts(numThreads), done(false), availableWorkers(numThreads) {
