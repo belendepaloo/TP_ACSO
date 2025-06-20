@@ -24,7 +24,7 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
         tasks.push(thunk);
         pendingTasks++;
     }
-    taskAvailable.notify_all(); // Notificar al dispatcher
+    taskAvailable.notify_all();
 }
 
 
