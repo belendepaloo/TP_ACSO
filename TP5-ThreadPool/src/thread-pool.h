@@ -8,49 +8,39 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
+#include "Semaphore.h"
 
 using namespace std;
 
-struct worker_t {
-    int id;
+typedef struct worker {
     thread ts;
-    function<void()> task;
-    bool ready = false;
-    mutex mtx;
-    condition_variable cv;
-};
+    Semaphore ready{0};               // señal para ejecutar el trabajo
+    function<void(void)> task;        // tarea asignada
+    atomic<bool> available{true};    // si está disponible
+} worker_t;
 
 class ThreadPool {
-public:
+  public:
     ThreadPool(size_t numThreads);
     void schedule(const function<void(void)>& thunk);
     void wait();
     ~ThreadPool();
 
-    // Evita copia y asignación
-    ThreadPool(const ThreadPool& other) = delete;
-    ThreadPool& operator=(const ThreadPool& other) = delete;
-
-private:
+  private:
     void worker(int id);
     void dispatcher();
 
-    bool done;
-    int pendingTasks;
+    thread dt;                              // hilo despachador
+    vector<worker_t> wts;                   // workers
+    queue<function<void(void)>> tasks;      // cola de tareas
 
-    thread dt;                          // Dispatcher thread
-    vector<worker_t> wts;               // Worker pool
+    mutex queueLock;
+    condition_variable_any taskAvailable;   // notificación al dispatcher
 
-    queue<function<void()>> tasks;      // Task queue
-    mutex taskMutex;                    // Protects task queue
-    condition_variable taskAvailable;   // Signals when tasks are available
-
-    queue<int> idleWorkers;             // IDs of available workers
-    mutex wtQueueMutex;                 // Protects idleWorkers queue
-    condition_variable workerReady;     // Signals when workers are available
-
-    mutex waitMutex;                    // Protects pendingTasks + done
-    condition_variable waitCond;        // Notifies wait() when all tasks are done
+    atomic<bool> done;                      // shutdown flag
+    Semaphore availableWorkers;             // cuenta de workers disponibles
+    atomic<int> pendingTasks{0};            // tareas en ejecución
 };
 
 #endif

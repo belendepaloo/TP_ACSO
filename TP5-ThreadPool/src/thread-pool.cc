@@ -1,131 +1,87 @@
-// thread-pool.cc
 #include "thread-pool.h"
-#include <iostream>
-using namespace std;
 
 ThreadPool::ThreadPool(size_t numThreads)
-    : done(false),
-      pendingTasks(0),
-      wts(numThreads) {
+    : wts(numThreads), done(false), availableWorkers(numThreads) {
 
     for (size_t i = 0; i < numThreads; ++i) {
-        wts[i].id = i;
-        wts[i].ready = false;
-        wts[i].ts = thread([this, i]() { worker(i); });
+        wts[i].ts = thread([this, i] { worker(i); });
     }
 
-    dt = thread([this]() { dispatcher(); });
+    dt = thread([this] { dispatcher(); });
 }
 
 void ThreadPool::schedule(const function<void(void)>& thunk) {
-    if (!thunk) throw invalid_argument("Null task");
-
     {
-        lock_guard<mutex> lock(waitMutex);
-        if (done) throw runtime_error("Scheduling on a destroyed ThreadPool");
+        lock_guard<mutex> lg(queueLock);
+        tasks.push(thunk);
         pendingTasks++;
     }
-
-    {
-        lock_guard<mutex> lock(taskMutex);
-        tasks.push(thunk);
-    }
-
-    taskAvailable.notify_one();
-}
-
-void ThreadPool::wait() {
-    unique_lock<mutex> lock(waitMutex);
-    waitCond.wait(lock, [this]() { return pendingTasks == 0; });
-}
-
-ThreadPool::~ThreadPool() {
-    wait();
-
-    {
-        lock_guard<mutex> lock(waitMutex);
-        done = true;
-    }
-
-    taskAvailable.notify_all();
-
-    for (auto& w : wts) {
-        {
-            lock_guard<mutex> lock(w.mtx);
-            w.ready = true;
-        }
-        w.cv.notify_one();
-    }
-
-    if (dt.joinable()) dt.join();
-
-    for (auto& w : wts) {
-        if (w.ts.joinable()) w.ts.join();
-    }
-}
-
-void ThreadPool::worker(int id) {
-    worker_t& w = wts[id];
-    while (true) {
-        unique_lock<mutex> lock(w.mtx);
-        w.cv.wait(lock, [&]() { return w.ready || done; });
-
-        if (done) break;
-
-        function<void()> job;
-        {
-            lock_guard<mutex> tlock(w.mtx);
-            job = w.task;
-            w.task = nullptr;
-            w.ready = false;
-        }
-
-        if (job) job();
-
-        {
-            lock_guard<mutex> lock(waitMutex);
-            pendingTasks--;
-            if (pendingTasks == 0) waitCond.notify_all();
-        }
-
-        {
-            lock_guard<mutex> lock(wtQueueMutex);
-            idleWorkers.push(id);
-        }
-
-        workerReady.notify_one();
-    }
+    taskAvailable.notify_all(); // Notificar al dispatcher
 }
 
 void ThreadPool::dispatcher() {
     while (true) {
-        function<void()> job;
+        function<void(void)> job;
         {
-            unique_lock<mutex> lock(taskMutex);
-            taskAvailable.wait(lock, [this]() { return !tasks.empty() || done; });
+            unique_lock<mutex> lk(queueLock);
+            taskAvailable.wait(lk, [this] { return done || !tasks.empty(); });
+
             if (done && tasks.empty()) break;
+
             job = tasks.front();
             tasks.pop();
         }
 
-        int id;
-        {
-            unique_lock<mutex> lock(wtQueueMutex);
-            workerReady.wait(lock, [this]() { return !idleWorkers.empty(); });
-            id = idleWorkers.front();
-            idleWorkers.pop();
+        availableWorkers.wait(); // esperar a que haya un worker libre
+
+        for (size_t i = 0; i < wts.size(); ++i) {
+            if (wts[i].available.exchange(false)) {
+                wts[i].task = job;
+                wts[i].ready.signal();
+                break;
+            }
+        }
+    }
+}
+
+void ThreadPool::worker(int id) {
+    while (true) {
+        wts[id].ready.wait();
+
+        if (done && wts[id].task == nullptr) break;
+
+        if (wts[id].task) {
+            wts[id].task();
+            wts[id].task = nullptr;
+            pendingTasks--;
         }
 
-        worker_t& w = wts[id];
-        {
-            lock_guard<mutex> lock(w.mtx);
-            w.task = job;
-            w.ready = true;
-        }
-        w.cv.notify_one();
+        wts[id].available.store(true);
+        availableWorkers.signal();
+    }
+}
+
+void ThreadPool::wait() {
+    while (pendingTasks > 0) {
+        this_thread::yield();
+    }
+}
+
+ThreadPool::~ThreadPool() {
+    wait(); // esperar que terminen las tareas
+
+    done = true;
+
+    taskAvailable.notify_all(); // liberar dispatcher
+    if (dt.joinable()) dt.join();
+
+    // mandar señal nula a cada worker para que se apaguen
+    for (auto& w : wts) {
+        w.task = nullptr;
+        w.ready.signal();
     }
 
     for (auto& w : wts) {
-        w.cv.notify_one();
+        if (w.ts.joinable()) w.ts.join();
     }
 }
