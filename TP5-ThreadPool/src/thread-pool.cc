@@ -16,6 +16,10 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
         throw runtime_error("Cannot schedule after ThreadPool destruction");
     }
 
+    if (!thunk) {
+        throw invalid_argument("Scheduled task is null");
+    }
+
     {
         lock_guard<mutex> lg(queueLock);
         tasks.push(thunk);
@@ -23,6 +27,7 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
     }
     taskAvailable.notify_all(); // Notificar al dispatcher
 }
+
 
 
 void ThreadPool::dispatcher() {
