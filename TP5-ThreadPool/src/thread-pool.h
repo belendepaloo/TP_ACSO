@@ -16,9 +16,9 @@ using namespace std;
 
 typedef struct worker {
     thread ts;
-    Semaphore ready{0};               // señal para ejecutar el trabajo
-    function<void(void)> task;        // tarea asignada
-    atomic<bool> available{true};    // si está disponible
+    Semaphore ready{0};
+    function<void(void)> task;
+    atomic<bool> available{true};
 } worker_t;
 
 class ThreadPool {
@@ -32,19 +32,19 @@ class ThreadPool {
     void worker(int id);
     void dispatcher();
 
-    thread dt;                              // hilo despachador
-    vector<worker_t> wts;                   // workers
-    queue<function<void(void)>> tasks;      // cola de tareas
+    thread dt;
+    vector<worker_t> wts;
+    queue<function<void(void)>> tasks;
 
-    atomic<bool> done;                      // flag de destrucción
-    int pendingTasks = 0;                   // tareas pendientes
+    atomic<bool> done;
+    int pendingTasks = 0;
 
-    mutex queueLock;                        // protege cola y contador
-    condition_variable_any taskAvailable;   // para dispatcher
-    condition_variable_any allDone;         // para wait()
+    mutex queueLock;
+    condition_variable_any taskFree;
+    condition_variable_any allDone;
 
-    mutex workersLock;                      // protege acceso a workers
-    condition_variable_any workerAvailable; // notifica disponibilidad
+    mutex workersLock;
+    condition_variable_any workerFree;
 };
 
 #endif

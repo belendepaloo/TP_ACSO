@@ -21,7 +21,7 @@ void ThreadPool::schedule(const function<void(void)>& thunk) {
         tasks.push(thunk);
         pendingTasks++;
     }
-    taskAvailable.notify_all(); // notifica al dispatcher
+    taskFree.notify_all();
 }
 
 void ThreadPool::dispatcher() {
@@ -30,7 +30,7 @@ void ThreadPool::dispatcher() {
 
         {
             unique_lock<mutex> lk(queueLock);
-            taskAvailable.wait(lk, [this] { return done || !tasks.empty(); });
+            taskFree.wait(lk, [this] { return done || !tasks.empty(); });
 
             if (done && tasks.empty()) break;
 
@@ -38,9 +38,8 @@ void ThreadPool::dispatcher() {
             tasks.pop();
         }
 
-        // Esperar a que haya un worker disponible
         unique_lock<mutex> wlk(workersLock);
-        workerAvailable.wait(wlk, [this] {
+        workerFree.wait(wlk, [this] {
             for (auto& w : wts)
                 if (w.available.load()) return true;
             return false;
@@ -49,7 +48,7 @@ void ThreadPool::dispatcher() {
         for (size_t i = 0; i < wts.size(); ++i) {
             if (wts[i].available.exchange(false)) {
                 {
-                    lock_guard<mutex> lock(queueLock);  // sincroniza acceso a task
+                    lock_guard<mutex> lock(queueLock);
                     wts[i].task = job;
                 }
                 wts[i].ready.signal();
@@ -85,7 +84,7 @@ void ThreadPool::worker(int id) {
         }
 
         wts[id].available.store(true);
-        workerAvailable.notify_all();
+        workerFree.notify_all();
     }
 }
 
@@ -95,14 +94,12 @@ void ThreadPool::wait() {
 }
 
 ThreadPool::~ThreadPool() {
-    wait(); // esperar que terminen las tareas
-
+    wait();
     done = true;
 
-    taskAvailable.notify_all(); // liberar dispatcher
+    taskFree.notify_all();
     if (dt.joinable()) dt.join();
 
-    // mandar señal nula a cada worker para que se apaguen
     for (auto& w : wts) {
         {
             lock_guard<mutex> lock(queueLock);
